@@ -1,10 +1,8 @@
 package com.example.nudgev0
 
 import android.accessibilityservice.AccessibilityService
-import android.content.Intent
+import android.content.Context
 import android.graphics.PixelFormat
-import android.os.Build
-import android.util.Log
 import android.view.*
 import android.view.accessibility.AccessibilityEvent
 import android.widget.TextView
@@ -19,11 +17,17 @@ class MyAccessibilityService : AccessibilityService() {
 
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
+    // Filter state (Issue 1)
+    private var lastWindowStateChangeTime = 0L
+    private var lastTextChangeTime = 0L
+    private var lastScrollTime = 0L
+    private var lastCascadeTime = 0L
+    private var lastItemCount = -1
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
 
-        // Listen for the toggle signal from the UI
         serviceScope.launch {
             isBubbleVisible.collect { shouldShow ->
                 if (shouldShow) showBubble() else removeBubble()
@@ -38,6 +42,11 @@ class MyAccessibilityService : AccessibilityService() {
         bubbleView = inflater.inflate(R.layout.bubble_layout, null)
         bubbleTextView = bubbleView?.findViewById(R.id.bubble_text_view)
 
+        // Issue 5: Restore last saved position instead of always defaulting
+        val prefs = getSharedPreferences("nudge_prefs", Context.MODE_PRIVATE)
+        val savedX = prefs.getInt("bubble_x", 50)
+        val savedY = prefs.getInt("bubble_y", 200)
+
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -46,18 +55,15 @@ class MyAccessibilityService : AccessibilityService() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.BOTTOM or Gravity.END
-            x = 50
-            y = 200
+            x = savedX
+            y = savedY
         }
 
-        // --- TOUCH LISTENER WITH ANIMATION LOGIC ---
         bubbleView?.setOnTouchListener(object : View.OnTouchListener {
             private var initialX = 0
             private var initialY = 0
             private var initialTouchX = 0f
             private var initialTouchY = 0f
-
-            // Variables to detect a "Click"
             private val CLICK_THRESHOLD = 10
             private var isClick = false
 
@@ -68,29 +74,30 @@ class MyAccessibilityService : AccessibilityService() {
                         initialY = params.y
                         initialTouchX = event.rawX
                         initialTouchY = event.rawY
-
-                        // Assume it's a click until the user moves their finger
                         isClick = true
                         return true
                     }
                     MotionEvent.ACTION_MOVE -> {
                         val deltaX = (event.rawX - initialTouchX).toInt()
                         val deltaY = (event.rawY - initialTouchY).toInt()
-
-                        // If user moves finger more than 10 pixels, it's a Drag, not a Click
                         if (Math.abs(deltaX) > CLICK_THRESHOLD || Math.abs(deltaY) > CLICK_THRESHOLD) {
                             isClick = false
                         }
-
                         params.x = initialX - deltaX
                         params.y = initialY - deltaY
                         windowManager.updateViewLayout(bubbleView, params)
                         return true
                     }
                     MotionEvent.ACTION_UP -> {
-                        // If it was a click, play the Heartbeat Animation!
                         if (isClick) {
                             performHeartbeatAnimation(v)
+                        } else {
+                            // Issue 5: Persist position after every drag
+                            getSharedPreferences("nudge_prefs", Context.MODE_PRIVATE)
+                                .edit()
+                                .putInt("bubble_x", params.x)
+                                .putInt("bubble_y", params.y)
+                                .apply()
                         }
                         return true
                     }
@@ -103,14 +110,12 @@ class MyAccessibilityService : AccessibilityService() {
         updateBubbleText()
     }
 
-    // --- THE HEARTBEAT ANIMATION ---
     private fun performHeartbeatAnimation(view: View) {
         view.animate()
-            .scaleX(1.2f) // Grow to 120%
+            .scaleX(1.2f)
             .scaleY(1.2f)
-            .setDuration(100) // Fast expansion (0.1s)
+            .setDuration(100)
             .withEndAction {
-                // Shrink back to normal
                 view.animate()
                     .scaleX(1.0f)
                     .scaleY(1.0f)
@@ -129,21 +134,60 @@ class MyAccessibilityService : AccessibilityService() {
     }
 
     private fun updateBubbleText() {
-        // Now this can see _scrollCount because they are in the same file
         bubbleTextView?.text = _scrollCount.value.toString()
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-
-        // If paused, do NOTHING. Just return.
         if (_isPaused.value) return
+        event ?: return
 
-        if (event?.eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED) {
-            _scrollCount.update { it + 1 }
-            _scrollTimestamps.update { it + System.currentTimeMillis() }
+        val now = System.currentTimeMillis()
 
-            if (_isBubbleVisible.value) {
-                updateBubbleText()
+        when (event.eventType) {
+            // Issue 1 filters B and C rely on tracking these event times
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
+                lastWindowStateChangeTime = now
+            }
+            AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED -> {
+                lastTextChangeTime = now
+            }
+            AccessibilityEvent.TYPE_VIEW_SCROLLED -> {
+                val pkg = event.packageName?.toString() ?: ""
+
+                // A: Keyboard skip
+                if (pkg.contains("inputmethod") || pkg.contains("keyboard") || pkg.contains("gboard")) return
+
+                // B: Window-state shield — ignore scrolls within 500ms of a screen/keyboard transition
+                if (now - lastWindowStateChangeTime < 500) return
+
+                // C: Typing shield — ignore scrolls within 500ms of a text-change event
+                if (now - lastTextChangeTime < 500) return
+
+                // D: EditText skip — scrolling inside a text field is not a content scroll
+                if (event.className?.contains("EditText") == true) return
+
+                // E & F: Item-count cascade — a changing adapter count means programmatic scroll;
+                //         F then debounces for 500ms after such a cascade
+                val currentItemCount = event.itemCount
+                if (lastItemCount != -1 && currentItemCount != lastItemCount) {
+                    lastCascadeTime = now
+                    lastItemCount = currentItemCount
+                    return
+                }
+                lastItemCount = currentItemCount
+                if (now - lastCascadeTime < 500) return
+
+                // G: Continuous-motion grouper — fling frames within 400ms of the last counted
+                //    scroll belong to the same swipe gesture; only the first event counts
+                if (now - lastScrollTime < 400) return
+
+                lastScrollTime = now
+                _scrollCount.update { it + 1 }
+                _scrollTimestamps.update { it + now }
+
+                if (_isBubbleVisible.value) {
+                    updateBubbleText()
+                }
             }
         }
     }
@@ -155,7 +199,6 @@ class MyAccessibilityService : AccessibilityService() {
         serviceScope.cancel()
     }
 
-    // --- ONLY ONE COMPANION OBJECT ALLOWED ---
     companion object {
         private val _scrollCount = MutableStateFlow(0)
         val scrollCount = _scrollCount.asStateFlow()

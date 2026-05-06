@@ -29,15 +29,12 @@ class ResetWorker(
         val yesterdayDate = sdf.format(calendar.time)
 
         return try {
-            // 3. Save to Database
             dao.insertOrUpdate(ScrollDay(yesterdayDate, countToSave))
-
-            // 4. Reset the live counter
             MyAccessibilityService.resetScrollCount()
-
+            AnalyticsHelper.logDailyScrollSummary(countToSave)
             Result.success()
         } catch (e: Exception) {
-            Result.retry() // Try again if the database was busy
+            Result.retry()
         }
     }
 }

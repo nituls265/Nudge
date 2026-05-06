@@ -19,10 +19,13 @@ class MyAccessibilityService : AccessibilityService() {
 
     // Filter state (Issue 1)
     private var lastWindowStateChangeTime = 0L
+    private var lastKeyboardTransitionTime = 0L
     private var lastTextChangeTime = 0L
     private var lastScrollTime = 0L
     private var lastCascadeTime = 0L
     private var lastItemCount = -1
+
+    private val keyboardPackageHints = listOf("inputmethod", "keyboard", "gboard")
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -146,6 +149,21 @@ class MyAccessibilityService : AccessibilityService() {
         when (event.eventType) {
             // Issue 1 filters B and C rely on tracking these event times
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
+                val pkg = event.packageName?.toString() ?: ""
+                val isKeyboard = keyboardPackageHints.any { pkg.contains(it) } ||
+                    event.className?.toString()?.let {
+                        it.contains("InputMethod") || it.contains("SoftInput")
+                    } == true
+                if (isKeyboard) {
+                    lastKeyboardTransitionTime = now
+                    // The keyboard-close scroll fires BEFORE this event (ordering issue);
+                    // retroactively undo it if one slipped through within the last 500ms
+                    if (now - lastScrollTime < 500 && _scrollCount.value > 0) {
+                        _scrollCount.update { maxOf(0, it - 1) }
+                        _scrollTimestamps.update { if (it.isNotEmpty()) it.dropLast(1) else it }
+                        lastScrollTime = 0L
+                    }
+                }
                 lastWindowStateChangeTime = now
             }
             AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED -> {
@@ -159,6 +177,10 @@ class MyAccessibilityService : AccessibilityService() {
 
                 // B: Window-state shield — ignore scrolls within 500ms of a screen/keyboard transition
                 if (now - lastWindowStateChangeTime < 500) return
+
+                // B2: Keyboard-transition shield — forward guard for scrolls that fire AFTER
+                //     the keyboard toggles (complements the retroactive undo in TYPE_WINDOW_STATE_CHANGED)
+                if (now - lastKeyboardTransitionTime < 500) return
 
                 // C: Typing shield — ignore scrolls within 500ms of a text-change event
                 if (now - lastTextChangeTime < 500) return

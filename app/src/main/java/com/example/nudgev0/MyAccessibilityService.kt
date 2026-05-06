@@ -20,6 +20,8 @@ class MyAccessibilityService : AccessibilityService() {
     // Filter state (Issue 1)
     private var lastWindowStateChangeTime = 0L
     private var lastKeyboardTransitionTime = 0L
+    private var lastEditTextFocusTime = 0L
+    private var isEditTextFocused = false
     private var lastTextChangeTime = 0L
     private var lastScrollTime = 0L
     private var lastCascadeTime = 0L
@@ -147,7 +149,17 @@ class MyAccessibilityService : AccessibilityService() {
         val now = System.currentTimeMillis()
 
         when (event.eventType) {
-            // Issue 1 filters B and C rely on tracking these event times
+            AccessibilityEvent.TYPE_VIEW_FOCUSED -> {
+                val isEditText = event.className?.contains("EditText") == true
+                if (isEditText) {
+                    // Case 2 fix: EditText just gained focus → keyboard is about to open.
+                    // Record the time so filter B3 can block the imminent reposition scroll.
+                    isEditTextFocused = true
+                    lastEditTextFocusTime = now
+                } else {
+                    isEditTextFocused = false
+                }
+            }
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
                 val pkg = event.packageName?.toString() ?: ""
                 val isKeyboard = keyboardPackageHints.any { pkg.contains(it) } ||
@@ -155,14 +167,26 @@ class MyAccessibilityService : AccessibilityService() {
                         it.contains("InputMethod") || it.contains("SoftInput")
                     } == true
                 if (isKeyboard) {
+                    // Keyboard dismissed via its own window event
+                    isEditTextFocused = false
                     lastKeyboardTransitionTime = now
-                    // The keyboard-close scroll fires BEFORE this event (ordering issue);
-                    // retroactively undo it if one slipped through within the last 500ms
+                    // Case 1 fix: the reposition scroll fires BEFORE this event due to event
+                    // ordering — retroactively undo it if one slipped through within 500ms
                     if (now - lastScrollTime < 500 && _scrollCount.value > 0) {
                         _scrollCount.update { maxOf(0, it - 1) }
                         _scrollTimestamps.update { if (it.isNotEmpty()) it.dropLast(1) else it }
                         lastScrollTime = 0L
                     }
+                } else if (isEditTextFocused && now - lastScrollTime < 300) {
+                    // Case 1 fix (non-keyboard package path): keyboard is known to be open
+                    // (EditText focused) and a window state change fired very close to a scroll.
+                    // Covers dismissal via back-gesture or other paths that don't report as a
+                    // keyboard package (e.g., the event comes from com.whatsapp instead of GBoard).
+                    isEditTextFocused = false
+                    lastKeyboardTransitionTime = now
+                    _scrollCount.update { maxOf(0, it - 1) }
+                    _scrollTimestamps.update { if (it.isNotEmpty()) it.dropLast(1) else it }
+                    lastScrollTime = 0L
                 }
                 lastWindowStateChangeTime = now
             }
@@ -181,6 +205,10 @@ class MyAccessibilityService : AccessibilityService() {
                 // B2: Keyboard-transition shield — forward guard for scrolls that fire AFTER
                 //     the keyboard toggles (complements the retroactive undo in TYPE_WINDOW_STATE_CHANGED)
                 if (now - lastKeyboardTransitionTime < 500) return
+
+                // B3: EditText-focus shield — keyboard is in the process of opening;
+                //     the content reposition scroll fires within ~200ms of the EditText gaining focus
+                if (now - lastEditTextFocusTime < 800) return
 
                 // C: Typing shield — ignore scrolls within 500ms of a text-change event
                 if (now - lastTextChangeTime < 500) return

@@ -103,7 +103,7 @@ fun MainScreen(
                     }
 
                     IconButton(
-                        onClick = { scrollViewModel.resetScrollCount() },
+                        onClick = { scrollViewModel.resetAndSave() },
                         modifier = Modifier.background(Color(0xFFF3F4F6), RoundedCornerShape(12.dp))
                     ) {
                         Icon(Icons.Default.Refresh, contentDescription = "Reset", tint = Color.Gray)

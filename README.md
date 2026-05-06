@@ -11,18 +11,18 @@ A draggable floating bubble shows the live count on top of whatever app you're u
 ## Features
 
 - **All-app scroll counter.** Uses an Android `AccessibilityService` to detect scroll gestures across the whole device, not just inside one app.
-- **Floating bubble overlay.** Shows the running daily count on top of any app. Drag it anywhere; it snaps to the nearest screen edge with a smooth animation and pulses on each new scroll.
+- **Floating bubble overlay.** Shows the running daily count on top of any app. Drag it anywhere; it snaps to the nearest screen edge with a smooth animation and pulses on each new scroll. Position is remembered across service restarts.
 - **History dashboard** (Jetpack Compose + Material 3): today's total, peak hour, average per day, and a bar chart with 7 / 30 / 90 day toggles. The 3-month view is bucketed into weekly averages.
-- **Pause and reset.** Pause the counter when you don't want it tracking, or reset today's count manually.
+- **Pause and reset.** Pause the counter when you don't want it tracking, or reset today's count manually. A manual reset saves the current count to history before wiping.
 - **Crash-safe persistence.** Every counted scroll is written immediately to `SharedPreferences` and throttled (≤ once per 2 s) to a Room database, so the count survives the OS killing the service.
-- **Midnight rollover.** Yesterday's tally is locked into the database and the live counter resets at midnight.
+- **Midnight rollover.** Yesterday's tally is locked into the database and the live counter resets at midnight via a `WorkManager` `PeriodicWorkRequest` scheduled from `MainActivity`.
 - **Anonymous analytics.** Daily totals and feature usage are sent to Firebase Analytics.
 
 ## Tech stack
 
 - Kotlin, Jetpack Compose, Material 3
 - Android `AccessibilityService` + `WindowManager` overlay
-- Room (SQLite) for history, SharedPreferences for the live counter
+- Room (SQLite) for history, SharedPreferences for the live counter and bubble position
 - WorkManager for the daily reset job
 - Firebase Analytics
 - Gradle Kotlin DSL, kapt, version catalog (`gradle/libs.versions.toml`)
@@ -63,11 +63,11 @@ Anything that survives all seven filters increments the counter, gets written to
 
 ```
 app/src/main/java/com/example/nudgev0/
-├── MainActivity.kt              # Compose entry point, builds the ViewModel factory
+├── MainActivity.kt              # Compose entry point, builds the ViewModel factory, schedules ResetWorker
 ├── MainScreen.kt                # Dashboard UI (cards, chart, controls, time chips)
 ├── ScrollViewModel.kt           # Bridges service flows + Room into chart data
 ├── ViewModelFactory.kt          # Injects the ScrollDao into ScrollViewModel
-├── MyAccessibilityService.kt    # Scroll detection, overlay bubble, SSOT state
+├── MyAccessibilityService.kt    # Scroll detection (7 filters), overlay bubble, SSOT state
 ├── AccessibilityServiceUtils.kt # "Is the service enabled?" helper
 ├── ResetWorker.kt               # Midnight rollover (Room write + analytics + wipe)
 ├── AnalyticsHelper.kt           # Firebase Analytics events
@@ -117,10 +117,8 @@ Steps:
 
 ## Roadmap / known gaps
 
-- `ResetWorker` is implemented but isn't enqueued on app start yet — the midnight rollover currently only works if the accessibility service happens to be alive across the day boundary. Wiring it up in `MainActivity` (a daily `PeriodicWorkRequest`) is the next obvious step.
 - Package id is still `com.example.nudgev0` — needs renaming before any Play Store release.
 - No unit/instrumentation tests beyond the scaffolded `ExampleUnitTest` and `ExampleInstrumentedTest`.
-- Bubble position isn't persisted across service restarts.
 
 ## License
 

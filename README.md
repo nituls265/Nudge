@@ -5,6 +5,8 @@ An Android app that counts how many times you scroll across all your apps each d
 A draggable floating bubble shows the live count on top of whatever app you're using, and a Compose dashboard breaks down your history with 7-day, 30-day, and 3-month views plus a peak-activity-hour insight.
 
 > Status: pre-release (v0). Built as a personal project — package id is still `com.example.nudgev0`.
+>
+> Last documented: 2026-05-05
 
 ## Features
 

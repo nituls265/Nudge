@@ -1,48 +1,79 @@
 package com.example.nudgev0
 
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.example.nudgev0.data.ScrollDatabase
+import com.example.nudgev0.ui.theme.Nudgev0Theme
 import java.util.Calendar
 import java.util.concurrent.TimeUnit
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val database = ScrollDatabase.getDatabase(applicationContext)
-        val viewModelFactory = ScrollViewModelFactory(database.scrollDao())
 
-        // Issue 2: Schedule the midnight rollover job
-        scheduleResetWorker()
+        recordFirstLaunchDate()
+        incrementChartHintCount()
+        scheduleMidnightReset()
+        NotificationHelper.createChannel(applicationContext)
+        requestNotificationPermission()
+
+        val database = ScrollDatabase.getDatabase(applicationContext)
+        val viewModelFactory = ScrollViewModelFactory(database.scrollDao(), database.unlockDao(), database.appScrollDao())
 
         setContent {
-            MaterialTheme {
-                Surface(color = MaterialTheme.colorScheme.background) {
+            Nudgev0Theme {
+                Surface {
                     MainScreen(factory = viewModelFactory)
                 }
             }
         }
     }
 
-    private fun scheduleResetWorker() {
-        val resetRequest = PeriodicWorkRequestBuilder<ResetWorker>(1, TimeUnit.DAYS)
-            .setInitialDelay(millisUntilMidnight(), TimeUnit.MILLISECONDS)
-            .build()
-
-        WorkManager.getInstance(applicationContext).enqueueUniquePeriodicWork(
-            "midnight_reset",
-            ExistingPeriodicWorkPolicy.KEEP,
-            resetRequest
-        )
+    override fun onStop() {
+        super.onStop()
+        val currentCount = MyAccessibilityService.scrollCount.value
+        if (currentCount > 0) {
+            AnalyticsHelper.logSessionSnapshot(currentCount)
+        }
     }
 
-    private fun millisUntilMidnight(): Long {
+    private fun incrementChartHintCount() {
+        val prefs = getSharedPreferences("NudgePrefs", Context.MODE_PRIVATE)
+        val count = prefs.getInt("CHART_HINT_COUNT", 0)
+        if (count < 3) prefs.edit().putInt("CHART_HINT_COUNT", count + 1).apply()
+    }
+
+    private fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED
+            ) {
+                ActivityCompat.requestPermissions(
+                    this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 100
+                )
+            }
+        }
+    }
+
+    private fun recordFirstLaunchDate() {
+        val prefs = getSharedPreferences("NudgePrefs", Context.MODE_PRIVATE)
+        if (!prefs.contains("FIRST_LAUNCH_DATE")) {
+            prefs.edit().putLong("FIRST_LAUNCH_DATE", System.currentTimeMillis()).apply()
+        }
+    }
+
+    private fun scheduleMidnightReset() {
         val now = Calendar.getInstance()
         val midnight = Calendar.getInstance().apply {
             add(Calendar.DAY_OF_YEAR, 1)
@@ -51,6 +82,16 @@ class MainActivity : ComponentActivity() {
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
         }
-        return midnight.timeInMillis - now.timeInMillis
+        val delayUntilMidnight = midnight.timeInMillis - now.timeInMillis
+
+        val resetWork = PeriodicWorkRequestBuilder<ResetWorker>(1, TimeUnit.DAYS)
+            .setInitialDelay(delayUntilMidnight, TimeUnit.MILLISECONDS)
+            .build()
+
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            "midnight_reset",
+            ExistingPeriodicWorkPolicy.KEEP,
+            resetWork
+        )
     }
 }

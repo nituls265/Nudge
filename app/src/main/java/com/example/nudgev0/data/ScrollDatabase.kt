@@ -1,52 +1,175 @@
 package com.example.nudgev0.data
 
-import android.content.Context // <-- Add this import
+import android.content.Context
 import androidx.room.*
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
+import kotlinx.coroutines.flow.Flow
 
-// THE DATA MODEL (This part is perfect)
+// ── Scroll entities ──────────────────────────────────────────────────────────
+
 @Entity(tableName = "scroll_history")
 data class ScrollDay(
-    @PrimaryKey val date: String, // e.g., "2026-02-11"
+    @PrimaryKey val date: String,
     val count: Int
 )
 
-// THE QUERIES (DAO) (This part is perfect)
+@Entity(tableName = "scroll_hours", primaryKeys = ["date", "hour"])
+data class ScrollHour(
+    val date: String,
+    val hour: Int,
+    val count: Int
+)
+
+data class HourTotal(val hour: Int, val total: Int)
+
 @Dao
 interface ScrollDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOrUpdate(day: ScrollDay)
 
-    @Query("SELECT AVG(count) FROM scroll_history WHERE date >= :startDate")
-    suspend fun getAverageSince(startDate: String): Double?
-
     @Query("SELECT * FROM scroll_history ORDER BY date DESC LIMIT 7")
-    fun getLast7Days(): kotlinx.coroutines.flow.Flow<List<ScrollDay>>
+    fun getLast7Days(): Flow<List<ScrollDay>>
 
     @Query("SELECT * FROM scroll_history WHERE date >= :startDate ORDER BY date ASC")
-    fun getHistorySince(startDate: String): kotlinx.coroutines.flow.Flow<List<ScrollDay>>
+    fun getHistorySince(startDate: String): Flow<List<ScrollDay>>
+
+    @Query("SELECT * FROM scroll_history WHERE date = :date")
+    suspend fun getDay(date: String): ScrollDay?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertOrUpdateHour(hour: ScrollHour)
+
+    @Query("SELECT * FROM scroll_hours WHERE date = :date")
+    suspend fun getHoursForDate(date: String): List<ScrollHour>
+
+    @Query("SELECT hour, SUM(count) as total FROM scroll_hours WHERE date >= :startDate GROUP BY hour ORDER BY total DESC LIMIT 1")
+    fun getPeakHourSince(startDate: String): Flow<HourTotal?>
+
+    @Query("DELETE FROM scroll_hours WHERE date = :date")
+    suspend fun deleteHoursForDate(date: String)
 }
 
-// THE DATABASE INSTANCE (This is the corrected part)
-@Database(entities = [ScrollDay::class], version = 1)
-abstract class ScrollDatabase : RoomDatabase() { // <-- RENAMED THE CLASS
+// ── Unlock entities ──────────────────────────────────────────────────────────
 
+@Entity(tableName = "unlock_history")
+data class UnlockDay(
+    @PrimaryKey val date: String,
+    val count: Int,
+    val firstUnlockMs: Long,
+    val lastUnlockMs: Long,
+    val avgSessionMin: Float,
+    val longestSessionMin: Int
+)
+
+@Entity(tableName = "unlock_hours", primaryKeys = ["date", "hour"])
+data class UnlockHour(
+    val date: String,
+    val hour: Int,
+    val count: Int
+)
+
+@Dao
+interface UnlockDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertOrUpdate(day: UnlockDay)
+
+    @Query("SELECT * FROM unlock_history WHERE date >= :startDate ORDER BY date ASC")
+    fun getHistorySince(startDate: String): Flow<List<UnlockDay>>
+
+    @Query("SELECT * FROM unlock_history WHERE date = :date")
+    suspend fun getDay(date: String): UnlockDay?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertOrUpdateHour(hour: UnlockHour)
+
+    @Query("SELECT * FROM unlock_hours WHERE date = :date")
+    suspend fun getHoursForDate(date: String): List<UnlockHour>
+
+    @Query("SELECT hour, SUM(count) as total FROM unlock_hours WHERE date >= :startDate GROUP BY hour ORDER BY total DESC LIMIT 1")
+    fun getPeakHourSince(startDate: String): Flow<HourTotal?>
+
+    @Query("DELETE FROM unlock_hours WHERE date = :date")
+    suspend fun deleteHoursForDate(date: String)
+}
+
+// ── App scroll entities ───────────────────────────────────────────────────────
+
+@Entity(tableName = "app_scroll_history", primaryKeys = ["date", "packageName"])
+data class AppScrollDay(
+    val date: String,
+    val packageName: String,
+    val count: Int
+)
+
+data class AppScrollTotal(val packageName: String, val total: Int)
+
+@Dao
+interface AppScrollDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertOrUpdate(entry: AppScrollDay)
+
+    @Query("SELECT packageName, SUM(count) as total FROM app_scroll_history WHERE date >= :startDate AND date < :endDate GROUP BY packageName ORDER BY total DESC")
+    fun getTotalsBetween(startDate: String, endDate: String): Flow<List<AppScrollTotal>>
+
+    @Query("DELETE FROM app_scroll_history WHERE date = :date")
+    suspend fun deleteForDate(date: String)
+}
+
+// ── Migrations ───────────────────────────────────────────────────────────────
+
+val MIGRATION_1_2 = object : Migration(1, 2) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL(
+            "CREATE TABLE IF NOT EXISTS `scroll_hours` (`date` TEXT NOT NULL, `hour` INTEGER NOT NULL, `count` INTEGER NOT NULL, PRIMARY KEY(`date`, `hour`))"
+        )
+    }
+}
+
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL(
+            "CREATE TABLE IF NOT EXISTS `unlock_history` (`date` TEXT NOT NULL, `count` INTEGER NOT NULL, `firstUnlockMs` INTEGER NOT NULL, `lastUnlockMs` INTEGER NOT NULL, `avgSessionMin` REAL NOT NULL, `longestSessionMin` INTEGER NOT NULL, PRIMARY KEY(`date`))"
+        )
+        database.execSQL(
+            "CREATE TABLE IF NOT EXISTS `unlock_hours` (`date` TEXT NOT NULL, `hour` INTEGER NOT NULL, `count` INTEGER NOT NULL, PRIMARY KEY(`date`, `hour`))"
+        )
+    }
+}
+
+val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL(
+            "CREATE TABLE IF NOT EXISTS `app_scroll_history` (`date` TEXT NOT NULL, `packageName` TEXT NOT NULL, `count` INTEGER NOT NULL, PRIMARY KEY(`date`, `packageName`))"
+        )
+    }
+}
+
+// ── Database ─────────────────────────────────────────────────────────────────
+
+@Database(
+    entities = [ScrollDay::class, ScrollHour::class, UnlockDay::class, UnlockHour::class, AppScrollDay::class],
+    version = 4,
+    exportSchema = false
+)
+abstract class ScrollDatabase : RoomDatabase() {
     abstract fun scrollDao(): ScrollDao
+    abstract fun unlockDao(): UnlockDao
+    abstract fun appScrollDao(): AppScrollDao
 
-    // Companion object to create and manage the single database instance
     companion object {
-        @Volatile
-        private var INSTANCE: ScrollDatabase? = null
+        @Volatile private var INSTANCE: ScrollDatabase? = null
 
         fun getDatabase(context: Context): ScrollDatabase {
-            // Return the existing instance if it's already created
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     ScrollDatabase::class.java,
-                    "scroll_database" // This is the name of the actual database file on the device
-                ).build()
+                    "scroll_database"
+                )
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                    .build()
                 INSTANCE = instance
-                // return instance
                 instance
             }
         }

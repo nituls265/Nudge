@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nudge – UX Mock v6 · Interactive Chart</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #060d1f;
+    display: flex; justify-content: center; align-items: flex-start;
+    min-height: 100vh; font-family: -apple-system, 'Segoe UI', sans-serif;
+    padding: 40px 20px;
+  }
+  .phone-wrap { display: flex; flex-direction: column; align-items: center; }
+  h2 {
+    color: #94A3B8; font-size: 12px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 1px;
+    text-align: center; margin-bottom: 16px;
+  }
+  .phone {
+    width: 375px; background: #0F172A; border-radius: 50px;
+    border: 8px solid #1a2540;
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.05), 0 40px 80px rgba(0,0,0,0.7);
+    overflow: hidden;
+  }
+  .status-bar {
+    background: #0F172A; padding: 16px 28px 8px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .status-bar .time { color: #F8FAFC; font-size: 15px; font-weight: 600; }
+  .screen {
+    padding: 0 20px 36px; overflow-y: auto; max-height: 820px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .app-header {
+    padding: 14px 0 20px; display: flex;
+    justify-content: space-between; align-items: center;
+  }
+  .app-title  { color: #F8FAFC; font-size: 28px; font-weight: 800; letter-spacing: -0.5px; }
+  .app-date   { color: #64748B; font-size: 12px; font-weight: 500; }
+
+  /* metric cards */
+  .metric-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+  .metric-card {
+    background: #1E293B; border-radius: 22px; padding: 20px 16px 16px;
+    position: relative; overflow: hidden; cursor: pointer;
+  }
+  .metric-card::after {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; border-radius: 22px 22px 0 0;
+  }
+  .metric-card.scrolls::after { background: #34D399; }
+  .metric-card.unlocks::after { background: #60A5FA; }
+  .metric-card.active-card { outline: 2px solid rgba(255,255,255,0.12); }
+  .metric-icon  { font-size: 18px; margin-bottom: 8px; display: block; }
+  .metric-label { color: #94A3B8; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 4px; }
+  .metric-value { font-size: 38px; font-weight: 800; line-height: 1; letter-spacing: -2px; }
+  .metric-card.scrolls .metric-value { color: #34D399; }
+  .metric-card.unlocks .metric-value { color: #60A5FA; }
+  .metric-delta { margin-top: 6px; font-size: 11px; color: #64748B; font-weight: 500; }
+  .metric-delta .up   { color: #EF4444; }
+  .metric-delta .down { color: #34D399; }
+
+  /* time pills */
+  .time-pills { background: #1E293B; border-radius: 12px; padding: 4px; display: flex; gap: 2px; margin-bottom: 18px; }
+  .pill { flex: 1; text-align: center; padding: 8px 4px; border-radius: 9px; font-size: 12px; font-weight: 600; color: #94A3B8; cursor: pointer; }
+  .pill.active { background: #0F172A; color: #F8FAFC; }
+
+  /* tab toggle */
+  .metric-toggle { display: flex; border-bottom: 1px solid #1E293B; margin-bottom: 14px; }
+  .toggle-btn {
+    flex: 1; text-align: center; padding: 10px 4px;
+    font-size: 13px; font-weight: 700; color: #64748B;
+    cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  .toggle-btn.active.scrolls { color: #34D399; border-bottom-color: #34D399; }
+  .toggle-btn.active.unlocks { color: #60A5FA; border-bottom-color: #60A5FA; }
+
+  /* chart header */
+  .chart-header-row {
+    display: flex; justify-content: space-between; align-items: flex-end;
+    margin-bottom: 4px; cursor: ew-resize; user-select: none;
+  }
+  .chart-header-primary {
+    font-size: 12px; font-weight: 600; color: #94A3B8;
+    transition: color 0.2s;
+  }
+  .chart-header-primary.selected { font-weight: 700; }
+  .chart-header-secondary { font-size: 11px; color: #64748B; margin-top: 1px; }
+  .chart-dismiss {
+    color: #64748B; font-size: 14px; cursor: pointer; padding: 2px 4px;
+    display: none;
+  }
+  .chart-dismiss.visible { display: block; }
+
+  /* hint */
+  .chart-hint {
+    font-size: 10px; color: #64748B; margin-bottom: 8px;
+    opacity: 1; transition: opacity 0.6s;
+  }
+  .chart-hint.hidden { opacity: 0; pointer-events: none; }
+
+  /* chart */
+  .chart-outer {
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+    margin: 0 -4px; padding: 0 4px;
+    cursor: pointer;
+  }
+  .chart-outer::-webkit-scrollbar { display: none; }
+  .chart-area {
+    display: flex; align-items: flex-end; height: 140px; gap: 0;
+  }
+  .bar-col {
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: flex-end;
+    height: 100%; flex-shrink: 0; cursor: pointer;
+  }
+  .bar {
+    border-radius: 4px 4px 0 0; min-height: 4px;
+    transition: opacity 0.2s, background 0.2s;
+  }
+  .bar.green   { background: #34D399; }
+  .bar.blue    { background: #60A5FA; }
+  .bar.red     { background: #EF4444; }
+  .bar-day { font-size: 9px; font-weight: 600; margin-top: 5px; transition: color 0.2s; }
+
+  .sep { height: 1px; background: #1E293B; margin: 16px 0; }
+
+  /* insight cards */
+  .insight-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+  .insight-card { background: rgba(30,41,59,0.6); border-radius: 16px; padding: 14px; }
+  .insight-label { color: #64748B; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 4px; }
+  .insight-value { color: #F8FAFC; font-size: 14px; font-weight: 700; }
+  .insight-value.green { color: #34D399; }
+  .insight-value.blue  { color: #60A5FA; }
+  .insight-value.red   { color: #EF4444; }
+
+  /* app breakdown */
+  .breakdown-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .breakdown-title  { color: #94A3B8; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; }
+  .breakdown-toggle { font-size: 10px; font-weight: 700; color: #34D399; cursor: pointer; }
+  .app-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .app-icon { width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+  .app-info { flex: 1; min-width: 0; }
+  .app-name-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px; }
+  .app-name { color: #F8FAFC; font-size: 13px; font-weight: 600; }
+  .app-meta { color: #64748B; font-size: 11px; font-weight: 500; }
+  .app-pct  { color: #34D399; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+  .fill-track { height: 5px; background: #1E293B; border-radius: 3px; overflow: hidden; }
+  .fill-bar { height: 100%; border-radius: 3px; background: linear-gradient(90deg, #34D399, #059669); transition: width 0.4s ease; }
+  .fill-bar.muted { background: #334155; }
+
+  /* controls */
+  .controls { display: flex; gap: 10px; margin-bottom: 10px; }
+  .btn-primary   { flex: 1; padding: 15px; background: #34D399; color: #0F172A; border: none; border-radius: 16px; font-size: 14px; font-weight: 800; cursor: pointer; }
+  .btn-secondary { flex: 1; padding: 15px; background: #1E293B; color: #F8FAFC; border: none; border-radius: 16px; font-size: 14px; font-weight: 700; cursor: pointer; }
+  .btn-reset     { width: 100%; padding: 12px; background: transparent; border: none; color: #EF4444; font-size: 13px; font-weight: 700; cursor: pointer; }
+
+  /* swipe hint tooltip */
+  .swipe-tip {
+    font-size: 9px; color: #475569; text-align: center;
+    margin-top: -4px; margin-bottom: 6px;
+    transition: opacity 0.3s;
+  }
+</style>
+</head>
+<body>
+<div class="phone-wrap">
+  <h2>Nudge — Mock v6 · Tap bars · Swipe header · Switch tabs &amp; ranges</h2>
+  <div class="phone">
+    <div class="status-bar">
+      <span class="time">9:41</span>
+      <span style="display:flex;gap:5px;align-items:center">
+        <svg width="16" height="12" viewBox="0 0 16 12" fill="#94A3B8"><rect x="0" y="3" width="3" height="9" rx="1"/><rect x="4.5" y="2" width="3" height="10" rx="1"/><rect x="9" y="0" width="3" height="12" rx="1"/></svg>
+        <svg width="22" height="12" viewBox="0 0 24 12" fill="none"><rect x="0" y="2" width="21" height="8" rx="2" stroke="#94A3B8" stroke-width="1.5"/><rect x="2" y="4" width="14" height="4" rx="1" fill="#34D399"/><rect x="22" y="4" width="2" height="4" rx="1" fill="#94A3B8"/></svg>
+      </span>
+    </div>
+
+    <div class="screen">
+      <div class="app-header">
+        <div class="app-title">Nudge</div>
+        <div class="app-date">Thu, May 8</div>
+      </div>
+
+      <!-- METRIC CARDS -->
+      <div class="metric-row">
+        <div class="metric-card scrolls active-card" onclick="switchTab('scrolls')" id="card-scrolls">
+          <span class="metric-icon">👆</span>
+          <div class="metric-label">Scrolls Today</div>
+          <div class="metric-value">637</div>
+          <div class="metric-delta"><span class="up">↑ 22%</span> vs avg</div>
+        </div>
+        <div class="metric-card unlocks" onclick="switchTab('unlocks')" id="card-unlocks">
+          <span class="metric-icon">🔓</span>
+          <div class="metric-label">Unlocks Today</div>
+          <div class="metric-value">8</div>
+          <div class="metric-delta"><span class="down">↓ 5%</span> vs avg</div>
+        </div>
+      </div>
+
+      <!-- TIME RANGE PILLS -->
+      <div class="time-pills">
+        <div class="pill" onclick="selectRange(7,this)">7 Days</div>
+        <div class="pill active" onclick="selectRange(30,this)">30 Days</div>
+        <div class="pill" onclick="selectRange(90,this)">3 Months</div>
+      </div>
+
+      <!-- TAB TOGGLE -->
+      <div class="metric-toggle">
+        <div class="toggle-btn active scrolls" id="tab-scrolls" onclick="switchTab('scrolls')">👆 Scrolls</div>
+        <div class="toggle-btn unlocks"        id="tab-unlocks" onclick="switchTab('unlocks')">🔓 Unlocks</div>
+      </div>
+
+      <!-- CHART HEADER -->
+      <div class="chart-header-row" id="chart-header-row">
+        <div>
+          <div class="chart-header-primary" id="chart-header-primary">Scrolls / Day</div>
+          <div class="chart-header-secondary" id="chart-header-secondary">Avg: 521/day</div>
+        </div>
+        <span class="chart-dismiss" id="chart-dismiss" onclick="deselect()">✕</span>
+      </div>
+
+      <!-- HINT -->
+      <div class="chart-hint" id="chart-hint">Tap a bar to explore</div>
+      <div class="swipe-tip" id="swipe-tip" style="opacity:0">← swipe header to step through bars →</div>
+
+      <!-- CHART -->
+      <div class="chart-outer" id="chart-outer">
+        <div class="chart-area" id="chart-bars"></div>
+      </div>
+
+      <div class="sep"></div>
+
+      <!-- INSIGHT CARDS -->
+      <div id="insight-section"></div>
+
+      <div class="sep"></div>
+
+      <div class="controls">
+        <button class="btn-primary">Show Bubble</button>
+        <button class="btn-secondary">Pause</button>
+      </div>
+      <button class="btn-reset">Reset Today's Data</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Data ──────────────────────────────────────────────────────────────────────
+const SCROLL_DATA_30 = [
+  497,312,580,210,445,638,290,  501,389,712,185,420,550,310,
+  640,275,488,390,720,195,510,  305,418,655,280,520,375,490,
+  580,637
+];
+const UNLOCK_DATA_30 = [
+  38,22,51,18,42,58,28,  44,35,62,17,39,48,31,
+  55,24,40,36,61,19,47,  28,37,54,26,49,33,44,
+  51,8
+];
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function getDate30(i) {
+  const d = new Date(2026, 4, 8); // May 8 2026
+  d.setDate(d.getDate() - (29 - i));
+  return d;
+}
+function fmt(d)       { return `${MONTHS[d.getMonth()]} ${d.getDate()}`; }
+function fmtFull(d)   { return `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`; }
+
+function buildWeekly(data30) {
+  const weeks = [];
+  for (let w = 0; w < 4; w++) {
+    const slice = data30.slice(w * 7, w * 7 + 7);
+    const avg   = Math.round(slice.reduce((a,b)=>a+b,0) / slice.length);
+    const start = getDate30(w * 7);
+    weeks.push({ avg, start });
+  }
+  // partial last chunk (2 days: May 7+8)
+  const last = data30.slice(28);
+  weeks.push({ avg: Math.round(last.reduce((a,b)=>a+b,0)/last.length), start: getDate30(28) });
+  return weeks;
+}
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let currentTab   = 'scrolls';
+let currentRange = 30;
+let selectedBar  = null;
+let hintTimeout  = null;
+
+const accentColor = () => currentTab === 'scrolls' ? '#34D399' : '#60A5FA';
+const data30      = () => currentTab === 'scrolls' ? SCROLL_DATA_30 : UNLOCK_DATA_30;
+
+// ── Hint ──────────────────────────────────────────────────────────────────────
+function showHint() {
+  if (currentRange === 7) return;
+  const el = document.getElementById('chart-hint');
+  el.classList.remove('hidden');
+  clearTimeout(hintTimeout);
+  hintTimeout = setTimeout(() => el.classList.add('hidden'), 2500);
+}
+
+// ── Header ────────────────────────────────────────────────────────────────────
+function updateHeader() {
+  const primary   = document.getElementById('chart-header-primary');
+  const secondary = document.getElementById('chart-header-secondary');
+  const dismiss   = document.getElementById('chart-dismiss');
+  const swipeTip  = document.getElementById('swipe-tip');
+  const label     = currentTab === 'scrolls' ? 'Scrolls' : 'Unlocks';
+  const d         = data30();
+  const avg       = Math.round(d.reduce((a,b)=>a+b,0)/d.length);
+
+  if (selectedBar === null) {
+    primary.style.color = '#94A3B8';
+    primary.style.fontWeight = '600';
+    const suffix = currentRange === 90 ? '/ Week (avg)' : '/ Day';
+    primary.textContent   = `${label} ${suffix}`;
+    secondary.textContent = `Avg: ${avg}/day`;
+    dismiss.classList.remove('visible');
+    swipeTip.style.opacity = '0';
+  } else {
+    primary.style.color = accentColor();
+    primary.style.fontWeight = '700';
+    dismiss.classList.add('visible');
+    swipeTip.style.opacity = '1';
+
+    if (currentRange === 90) {
+      const weeks = buildWeekly(d);
+      const w = weeks[selectedBar];
+      const end = new Date(w.start); end.setDate(end.getDate() + 6);
+      primary.textContent   = `Week of ${fmt(w.start)} – ${fmt(end)}`;
+      secondary.textContent = `Avg: ${w.avg}/day`;
+    } else if (currentRange === 30) {
+      const date  = getDate30(selectedBar);
+      const count = d[selectedBar];
+      primary.textContent   = fmt(date);
+      secondary.textContent = `${count} ${label}`;
+    } else {
+      // 7-day: no selection
+    }
+  }
+}
+
+// ── Chart render ──────────────────────────────────────────────────────────────
+function renderChart() {
+  const container = document.getElementById('chart-bars');
+  const outer     = document.getElementById('chart-outer');
+  container.innerHTML = '';
+
+  let bars, barW, barGap, showDayLabel;
+
+  if (currentRange === 7) {
+    bars     = data30().slice(-7);
+    barW     = 36; barGap = 10; showDayLabel = true;
+    outer.style.overflowX = 'hidden';
+    container.style.width = '100%';
+    container.style.justifyContent = 'space-around';
+  } else if (currentRange === 30) {
+    bars     = data30();
+    barW     = 28; barGap = 6; showDayLabel = true;
+    outer.style.overflowX = 'auto';
+    container.style.width = (barW + barGap) * 30 + 'px';
+    container.style.justifyContent = '';
+  } else {
+    const weeks = buildWeekly(data30());
+    bars        = weeks.map(w => w.avg);
+    barW        = Math.floor((335 - 4 * 4) / 5); barGap = 4;
+    showDayLabel = true;
+    outer.style.overflowX = 'hidden';
+    container.style.width = '100%';
+    container.style.justifyContent = 'space-between';
+  }
+
+  const maxVal = Math.max(...(Array.isArray(bars[0]) ? bars.map(b=>b) : bars));
+  const color  = accentColor();
+
+  bars.forEach((val, i) => {
+    const isToday    = (currentRange !== 90) && (i === bars.length - 1);
+    const isSelected = selectedBar === i && currentRange !== 7;
+    const hasSel     = selectedBar !== null && currentRange !== 7;
+
+    // opacity logic
+    let opacity;
+    if (!hasSel)        opacity = isToday ? 1 : 0.4;
+    else if (isSelected) opacity = 1;
+    else                 opacity = 0.4;
+
+    const hPct   = Math.max((val / maxVal) * 120, 3);
+    const isHigh = currentTab === 'scrolls' && val > 400;
+    const barCol = isHigh ? '#EF4444' : color;
+
+    let label = '';
+    if (currentRange === 90)      label = `W${i+1}`;
+    else if (currentRange === 30) label = (i % 5 === 0) ? `${i+1}` : '';
+    else {
+      const d = getDate30(i + (30 - 7));
+      label = d.getDate().toString().padStart(2,'0');
+    }
+
+    const labelColor = isSelected ? color : (isToday ? '#94A3B8' : '#475569');
+
+    const col = document.createElement('div');
+    col.className = 'bar-col';
+    col.style.width    = barW + 'px';
+    col.style.minWidth = barW + 'px';
+    col.style.marginRight = barGap + 'px';
+
+    // count label for 7-day
+    if (currentRange === 7) {
+      const valEl = document.createElement('div');
+      valEl.style.cssText = `font-size:10px;font-weight:600;color:${isToday?'#F8FAFC':'#94A3B8'};margin-bottom:4px;`;
+      valEl.textContent = val;
+      col.appendChild(valEl);
+    }
+
+    const bar = document.createElement('div');
+    bar.className = 'bar';
+    bar.style.cssText = `
+      width:100%; height:${hPct}px;
+      background:${barCol}; opacity:${opacity};
+      border-radius:4px 4px 0 0;
+    `;
+    col.appendChild(bar);
+
+    const dayEl = document.createElement('div');
+    dayEl.className = 'bar-day';
+    dayEl.style.color = labelColor;
+    dayEl.textContent = label;
+    col.appendChild(dayEl);
+
+    if (currentRange !== 7) {
+      col.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectedBar = (selectedBar === i) ? null : i;
+        renderChart();
+        updateHeader();
+      });
+    }
+    container.appendChild(col);
+  });
+
+  // Tap outside bars → deselect
+  document.getElementById('chart-outer').onclick = () => {
+    if (selectedBar !== null) { selectedBar = null; renderChart(); updateHeader(); }
+  };
+}
+
+// ── Deselect ──────────────────────────────────────────────────────────────────
+function deselect() {
+  selectedBar = null;
+  renderChart();
+  updateHeader();
+}
+
+// ── Insights ──────────────────────────────────────────────────────────────────
+function renderInsights() {
+  const section = document.getElementById('insight-section');
+  if (currentTab === 'scrolls') {
+    section.innerHTML = `
+      <div class="insight-card" style="margin-bottom:10px">
+        <div class="insight-label">Peak Hour</div>
+        <div class="insight-value green">10 – 11 PM</div>
+      </div>
+      <div class="sep" style="margin:12px 0"></div>
+      <div id="breakdown-section">${buildBreakdown(currentRange)}</div>`;
+  } else {
+    section.innerHTML = `
+      <div class="insight-row">
+        <div class="insight-card"><div class="insight-label">First Unlock</div><div class="insight-value blue">7:12 AM</div></div>
+        <div class="insight-card"><div class="insight-label">Last Unlock</div><div class="insight-value red">11:48 PM</div></div>
+      </div>
+      <div class="insight-row" style="margin-top:0">
+        <div class="insight-card"><div class="insight-label">Avg Session</div><div class="insight-value">8 min</div></div>
+        <div class="insight-card"><div class="insight-label">Longest Session</div><div class="insight-value red">43 min</div></div>
+      </div>
+      <div class="insight-card">
+        <div class="insight-label">Peak Hour</div>
+        <div class="insight-value blue">9 – 10 PM</div>
+      </div>`;
+  }
+}
+
+// ── App breakdown ─────────────────────────────────────────────────────────────
+const APP_DATA_BY_RANGE = {
+  7:  [{icon:'📸',name:'Instagram',color:'#E1306C',pct:34,scrolls:106},{icon:'▶️',name:'YouTube',color:'#FF0000',pct:22,scrolls:68},{icon:'🎵',name:'TikTok',color:'#69C9D0',pct:18,scrolls:56},{icon:'🐦',name:'X (Twitter)',color:'#1DA1F2',pct:12,scrolls:37},{icon:'🤖',name:'Reddit',color:'#FF4500',pct:8,scrolls:25},{icon:'🧭',name:'Safari',color:'#006EFC',pct:4,scrolls:12},{icon:'⋯',name:'Other',color:'#475569',pct:2,scrolls:7}],
+  30: [{icon:'▶️',name:'YouTube',color:'#FF0000',pct:31,scrolls:2840},{icon:'📸',name:'Instagram',color:'#E1306C',pct:27,scrolls:2480},{icon:'🎵',name:'TikTok',color:'#69C9D0',pct:19,scrolls:1740},{icon:'🐦',name:'X (Twitter)',color:'#1DA1F2',pct:11,scrolls:1010},{icon:'🤖',name:'Reddit',color:'#FF4500',pct:7,scrolls:640},{icon:'🧭',name:'Safari',color:'#006EFC',pct:3,scrolls:275},{icon:'⋯',name:'Other',color:'#475569',pct:2,scrolls:175}],
+  90: [{icon:'▶️',name:'YouTube',color:'#FF0000',pct:33,scrolls:9100},{icon:'📸',name:'Instagram',color:'#E1306C',pct:28,scrolls:7700},{icon:'🎵',name:'TikTok',color:'#69C9D0',pct:16,scrolls:4400},{icon:'🐦',name:'X (Twitter)',color:'#1DA1F2',pct:10,scrolls:2750},{icon:'🤖',name:'Reddit',color:'#FF4500',pct:7,scrolls:1930},{icon:'🧭',name:'Safari',color:'#006EFC',pct:3,scrolls:825},{icon:'📧',name:'Gmail',color:'#EA4335',pct:2,scrolls:550},{icon:'⋯',name:'Other',color:'#475569',pct:1,scrolls:275}],
+};
+let breakdownExpanded = false;
+
+function buildBreakdown(range) {
+  if (currentTab !== 'scrolls') return '';
+  const data    = APP_DATA_BY_RANGE[range] || APP_DATA_BY_RANGE[30];
+  const maxPct  = data[0].pct;
+  const shown   = breakdownExpanded ? data : data.slice(0, 3);
+  const hidden  = data.length - 3;
+  const rl      = range === 7 ? 'today' : range === 30 ? '30-day total' : '90-day total';
+  const rows = shown.map(a => `
+    <div class="app-row">
+      <div class="app-icon" style="background:${a.color}22">${a.icon}</div>
+      <div class="app-info">
+        <div class="app-name-row">
+          <span class="app-name">${a.name}</span>
+          <span class="app-meta">${a.scrolls.toLocaleString()} scrolls</span>
+          <span class="app-pct">${a.pct}%</span>
+        </div>
+        <div class="fill-track">
+          <div class="fill-bar${a.name==='Other'?' muted':''}" style="width:${(a.pct/maxPct*100).toFixed(1)}%"></div>
+        </div>
+      </div>
+    </div>`).join('');
+  return `
+    <div class="breakdown-header">
+      <span class="breakdown-title">App Breakdown · ${rl}</span>
+      <span class="breakdown-toggle" onclick="toggleBreakdown()">${breakdownExpanded?'Show less ▲':`+${hidden} more ▼`}</span>
+    </div>${rows}`;
+}
+function toggleBreakdown() {
+  breakdownExpanded = !breakdownExpanded;
+  document.getElementById('breakdown-section').innerHTML = buildBreakdown(currentRange);
+}
+
+// ── Swipe on header ───────────────────────────────────────────────────────────
+(function() {
+  let startX = null;
+  const header = document.getElementById('chart-header-row');
+  header.addEventListener('touchstart', e => { startX = e.touches[0].clientX; }, {passive:true});
+  header.addEventListener('touchend', e => {
+    if (startX === null || selectedBar === null) return;
+    const dx = e.changedTouches[0].clientX - startX;
+    if (Math.abs(dx) < 40) return;
+    const maxIdx = currentRange === 90 ? buildWeekly(data30()).length - 1 : (currentRange === 30 ? 29 : 6);
+    selectedBar = dx < 0 ? Math.min(selectedBar + 1, maxIdx) : Math.max(selectedBar - 1, 0);
+    renderChart(); updateHeader(); startX = null;
+  });
+  // Mouse drag fallback for desktop preview
+  header.addEventListener('mousedown', e => { startX = e.clientX; });
+  header.addEventListener('mouseup', e => {
+    if (startX === null || selectedBar === null) return;
+    const dx = e.clientX - startX;
+    if (Math.abs(dx) < 40) return;
+    const maxIdx = currentRange === 90 ? buildWeekly(data30()).length - 1 : (currentRange === 30 ? 29 : 6);
+    selectedBar = dx < 0 ? Math.min(selectedBar + 1, maxIdx) : Math.max(selectedBar - 1, 0);
+    renderChart(); updateHeader(); startX = null;
+  });
+})();
+
+// ── Tab / range switching ─────────────────────────────────────────────────────
+function switchTab(tab) {
+  currentTab  = tab;
+  selectedBar = null;
+  breakdownExpanded = false;
+  ['scrolls','unlocks'].forEach(t => {
+    document.getElementById('tab-'+t).className = `toggle-btn ${t}${t===tab?' active':''}`;
+    const card = document.getElementById('card-'+t);
+    if (card) card.classList.toggle('active-card', t===tab);
+  });
+  renderChart(); updateHeader(); renderInsights(); showHint();
+}
+
+function selectRange(range, el) {
+  currentRange = range;
+  selectedBar  = null;
+  breakdownExpanded = false;
+  document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  renderChart(); updateHeader(); renderInsights(); showHint();
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+switchTab('scrolls');
+selectRange(30, document.querySelectorAll('.pill')[1]);
+</script>
+</body>
+</html>

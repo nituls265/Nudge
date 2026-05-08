@@ -2,68 +2,158 @@ package com.example.nudgev0
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.nudgev0.data.AppScrollDao
 import com.example.nudgev0.data.ScrollDao
 import com.example.nudgev0.data.ScrollDay
+import com.example.nudgev0.data.UnlockDao
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
-class ScrollViewModel(private val dao: ScrollDao) : ViewModel() {
+class ScrollViewModel(
+    private val scrollDao: ScrollDao,
+    private val unlockDao: UnlockDao,
+    private val appScrollDao: AppScrollDao
+) : ViewModel() {
 
-    val scrollCount = MyAccessibilityService.scrollCount
-    val scrollTimestamps = MyAccessibilityService.scrollTimestamps
-    val isBubbleVisible = MyAccessibilityService.isBubbleVisible
-    val isPaused: StateFlow<Boolean> = MyAccessibilityService.isPaused
+    // ── Live state from the service ───────────────────────────────────────────
+
+    val scrollCount:       StateFlow<Int>   = MyAccessibilityService.scrollCount
+    val scrollTimestamps:  StateFlow<List<Long>> = MyAccessibilityService.scrollTimestamps
+    val isBubbleVisible:   StateFlow<Boolean> = MyAccessibilityService.isBubbleVisible
+    val isPaused:          StateFlow<Boolean> = MyAccessibilityService.isPaused
+    val interventionState: StateFlow<InterventionState> = MyAccessibilityService.interventionState
+
+    val unlockCount:       StateFlow<Int>   = MyAccessibilityService.unlockCount
+    val firstUnlockMs:     StateFlow<Long>  = MyAccessibilityService.firstUnlockMs
+    val lastUnlockMs:      StateFlow<Long>  = MyAccessibilityService.lastUnlockMs
+    val avgSessionMin:     StateFlow<Float> = MyAccessibilityService.avgSessionMin
+    val longestSessionMin: StateFlow<Int>   = MyAccessibilityService.longestSessionMin
+
+    // ── Time range ────────────────────────────────────────────────────────────
 
     private val _timeRange = MutableStateFlow(7)
     val timeRange = _timeRange.asStateFlow()
 
-    fun setTimeRange(days: Int) {
-        _timeRange.value = days
-    }
+    fun setTimeRange(days: Int) { _timeRange.value = days }
+
+    // ── Scroll chart data ─────────────────────────────────────────────────────
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val chartData: StateFlow<List<ScrollDay>> = _timeRange.flatMapLatest { days ->
-        val cal = Calendar.getInstance()
-        cal.add(Calendar.DAY_OF_YEAR, -days)
+    val scrollChartData: StateFlow<List<ScrollDay>> = _timeRange.flatMapLatest { days ->
         val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val cal = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -days + 1) }
         val startDate = sdf.format(cal.time)
 
-        dao.getHistorySince(startDate).map { rawList ->
-            if (days == 90) {
-                rawList.chunked(7).map { weekDays ->
-                    val avg = weekDays.map { it.count }.average().toInt()
-                    val label = weekDays.firstOrNull()?.date ?: ""
-                    ScrollDay(label, avg)
-                }
-            } else {
-                rawList
-            }
+        scrollDao.getHistorySince(startDate).combine(MyAccessibilityService.scrollCount) { raw, liveCount ->
+            val map = raw.associateBy { it.date }.toMutableMap()
+            val today = sdf.format(Date())
+            map[today] = ScrollDay(today, liveCount)
+            filledDays(days, sdf, map) { ScrollDay(it, 0) }
+                .let { if (days == 90) weeklyAverage(it) else it }
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    // ── Unlock chart data ─────────────────────────────────────────────────────
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val unlockChartData: StateFlow<List<ScrollDay>> = _timeRange.flatMapLatest { days ->
+        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val cal = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -days + 1) }
+        val startDate = sdf.format(cal.time)
+
+        unlockDao.getHistorySince(startDate).combine(MyAccessibilityService.unlockCount) { raw, liveCount ->
+            val map = raw.associate { it.date to ScrollDay(it.date, it.count) }.toMutableMap()
+            val today = sdf.format(Date())
+            map[today] = ScrollDay(today, liveCount)
+            filledDays(days, sdf, map) { ScrollDay(it, 0) }
+                .let { if (days == 90) weeklyAverage(it) else it }
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // ── Peak hours ────────────────────────────────────────────────────────────
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val peakScrollHour: StateFlow<String> = _timeRange.flatMapLatest { days ->
+        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val start = sdf.format(Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -days + 1) }.time)
+        scrollDao.getPeakHourSince(start).map { it?.let { h -> formatHourRange(h.hour) } ?: "No data" }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "No data")
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val peakUnlockHour: StateFlow<String> = _timeRange.flatMapLatest { days ->
+        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val start = sdf.format(Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -days + 1) }.time)
+        unlockDao.getPeakHourSince(start).map { it?.let { h -> formatHourRange(h.hour) } ?: "No data" }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "No data")
+
+    // ── App breakdown ─────────────────────────────────────────────────────────
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val appBreakdown: StateFlow<List<Pair<String, Int>>> = _timeRange.flatMapLatest { days ->
+        val sdf   = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val today = sdf.format(Date())
+        val start = sdf.format(Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -days + 1) }.time)
+
+        appScrollDao.getTotalsBetween(start, today)
+            .combine(MyAccessibilityService.appScrollCounts) { dbTotals, liveCounts ->
+                val combined = dbTotals.associate { it.packageName to it.total }.toMutableMap()
+                liveCounts.forEach { (pkg, count) ->
+                    combined[pkg] = (combined[pkg] ?: 0) + count
+                }
+                combined.entries
+                    .filter { it.key.isNotEmpty() && it.key != "unknown" || it.value > 0 }
+                    .sortedByDescending { it.value }
+                    .map { it.toPair() }
+            }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private fun filledDays(
+        days: Int,
+        sdf: SimpleDateFormat,
+        map: Map<String, ScrollDay>,
+        default: (String) -> ScrollDay
+    ): List<ScrollDay> = (0 until days).map { i ->
+        val c = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -(days - 1) + i) }
+        val dateStr = sdf.format(c.time)
+        map[dateStr] ?: default(dateStr)
+    }
+
+    private fun weeklyAverage(list: List<ScrollDay>): List<ScrollDay> =
+        list.chunked(7).map { week ->
+            ScrollDay(week.first().date, week.map { it.count }.average().toInt())
+        }
+
+    private fun formatHourRange(hour: Int): String {
+        val fmt = SimpleDateFormat("h a", Locale.getDefault())
+        val start = Calendar.getInstance().apply { set(Calendar.HOUR_OF_DAY, hour); set(Calendar.MINUTE, 0) }
+        val end   = Calendar.getInstance().apply { set(Calendar.HOUR_OF_DAY, (hour + 1) % 24); set(Calendar.MINUTE, 0) }
+        return "${fmt.format(start.time)} – ${fmt.format(end.time)}"
+    }
+
+    // ── Actions ───────────────────────────────────────────────────────────────
+
     fun togglePause() {
         MyAccessibilityService.togglePause()
-        AnalyticsHelper.logPauseToggled(MyAccessibilityService.isPaused.value)
+        AnalyticsHelper.logPauseToggled(isPaused.value)
     }
 
     fun toggleBubble() {
         MyAccessibilityService.toggleBubbleVisibility()
-        AnalyticsHelper.logBubbleToggled(MyAccessibilityService.isBubbleVisible.value)
+        AnalyticsHelper.logBubbleToggled(isBubbleVisible.value)
     }
 
-    // Issue 4: Save today's count to Room before wiping the live counter
-    fun resetAndSave() {
-        viewModelScope.launch {
-            val count = MyAccessibilityService.scrollCount.value
-            if (count > 0) {
-                val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-                dao.insertOrUpdate(ScrollDay(today, count))
-            }
-            MyAccessibilityService.resetScrollCount()
-            AnalyticsHelper.logManualReset()
+    fun resetScrollCount() {
+        MyAccessibilityService.resetScrollCount()
+        AnalyticsHelper.logManualReset()
+        val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        viewModelScope.launch(Dispatchers.IO) {
+            scrollDao.deleteHoursForDate(today)
         }
     }
 }

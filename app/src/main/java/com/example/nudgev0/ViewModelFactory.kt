@@ -1,20 +1,21 @@
-// In a new file, e.g., ViewModelFactory.kt
 package com.example.nudgev0
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import com.example.nudgev0.data.AppScrollDao
 import com.example.nudgev0.data.ScrollDao
+import com.example.nudgev0.data.UnlockDao
 
-class ScrollViewModelFactory(private val dao: ScrollDao) : ViewModelProvider.Factory {
+class ScrollViewModelFactory(
+    private val scrollDao: ScrollDao,
+    private val unlockDao: UnlockDao,
+    private val appScrollDao: AppScrollDao
+) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        // Check if the ViewModel class being requested is our ScrollViewModel
         if (modelClass.isAssignableFrom(ScrollViewModel::class.java)) {
-            // If it is, create an instance of it, passing the dao in the constructor.
-            // The "as T" part is a required cast.
             @Suppress("UNCHECKED_CAST")
-            return ScrollViewModel(dao) as T
+            return ScrollViewModel(scrollDao, unlockDao, appScrollDao) as T
         }
-        // If it's some other ViewModel, throw an error.
         throw IllegalArgumentException("Unknown ViewModel class")
     }
 }

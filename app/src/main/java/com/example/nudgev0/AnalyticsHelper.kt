@@ -1,33 +1,65 @@
 package com.example.nudgev0
 
+import android.os.Bundle
+import com.google.firebase.FirebaseApp
 import com.google.firebase.analytics.FirebaseAnalytics
-import com.google.firebase.analytics.ktx.analytics
-import com.google.firebase.analytics.ktx.logEvent
-import com.google.firebase.ktx.Firebase
 
 object AnalyticsHelper {
 
-    private val analytics: FirebaseAnalytics by lazy { Firebase.analytics }
-
-    fun logDailyScrollSummary(totalScrolls: Int) {
-        analytics.logEvent("daily_scroll_summary") {
-            param("total_scrolls", totalScrolls.toLong())
-        }
+    // Bulletproof initialization bypassing KTX entirely
+    private val firebaseAnalytics: FirebaseAnalytics by lazy {
+        FirebaseAnalytics.getInstance(FirebaseApp.getInstance().applicationContext)
     }
 
+    // 1. Track the Daily Total (Fired at midnight)
+    fun logDailySummary(totalScrolls: Int) {
+        val bundle = Bundle().apply {
+            putInt("total_scrolls", totalScrolls)
+        }
+        firebaseAnalytics.logEvent("daily_scroll_summary", bundle)
+    }
+
+    // 2. Track Feature Usage: Bubble Toggled
     fun logBubbleToggled(isVisible: Boolean) {
-        analytics.logEvent("feature_bubble_toggled") {
-            param("is_visible", if (isVisible) 1L else 0L)
+        val bundle = Bundle().apply {
+            putBoolean("is_visible", isVisible)
         }
+        firebaseAnalytics.logEvent("feature_bubble_toggled", bundle)
     }
 
+    // 3. Track Friction: User Paused the App
     fun logPauseToggled(isPaused: Boolean) {
-        analytics.logEvent("action_pause_toggled") {
-            param("is_paused", if (isPaused) 1L else 0L)
+        val bundle = Bundle().apply {
+            putBoolean("is_paused", isPaused)
         }
+        firebaseAnalytics.logEvent("action_pause_toggled", bundle)
     }
 
+    // 4. Track Frustration: User manually reset today's data
     fun logManualReset() {
-        analytics.logEvent("action_manual_reset") {}
+        firebaseAnalytics.logEvent("action_manual_reset", null)
+    }
+
+    // 5. Snapshot when user closes the app — ensures data isn't lost before midnight
+    fun logSessionSnapshot(totalScrolls: Int) {
+        val bundle = Bundle().apply {
+            putInt("total_scrolls", totalScrolls)
+        }
+        firebaseAnalytics.logEvent("scroll_session_snapshot", bundle)
+    }
+
+    // 6. Intervention funnel: which level triggered
+    fun logInterventionTriggered(level: Int) {
+        val bundle = Bundle().apply { putInt("level", level) }
+        firebaseAnalytics.logEvent("intervention_triggered", bundle)
+    }
+
+    // 7. Intervention funnel: what the user chose (break / ignore)
+    fun logInterventionResponse(response: String, level: Int) {
+        val bundle = Bundle().apply {
+            putString("response", response)
+            putInt("level", level)
+        }
+        firebaseAnalytics.logEvent("intervention_response", bundle)
     }
 }

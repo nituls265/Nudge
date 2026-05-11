@@ -7,7 +7,11 @@ const laptopCount = document.getElementById('laptop-count');
 const lastSynced  = document.getElementById('last-synced');
 const domainBreak = document.getElementById('domain-breakdown');
 const syncStatus  = document.getElementById('sync-status');
+const pendingStatus = document.getElementById('pending-status');
 const errorMsg    = document.getElementById('error-msg');
+
+let syncedCount   = 0;   // last known Firebase count
+let refreshTimer  = null;
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 chrome.storage.local.get(['nudgeSyncId'], ({ nudgeSyncId }) => {
@@ -19,24 +23,21 @@ chrome.storage.local.get(['nudgeSyncId'], ({ nudgeSyncId }) => {
 function showSetupView() {
   setupView.style.display  = 'block';
   linkedView.style.display = 'none';
+  if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
 }
 
 document.getElementById('link-btn').addEventListener('click', async () => {
   const raw = document.getElementById('sync-id-input').value.trim();
   if (!raw) return showError('Please paste your Sync Code from the Nudge app.');
 
-  // Validate: try to fetch today's data for this sync ID
   const today = todayString();
   try {
     const res = await fetch(`${FIREBASE_DB_URL}/users/${raw}/laptop/${today}.json`);
     if (!res.ok && res.status !== 404) throw new Error('Could not reach database');
 
-    // Valid — save and switch to linked view
     await chrome.storage.local.set({ nudgeSyncId: raw });
     hideError();
     showLinkedView(raw);
-
-    // Trigger an immediate sync flush
     chrome.runtime.sendMessage({ type: 'FORCE_FLUSH' }).catch(() => {});
   } catch (e) {
     showError('Invalid Sync Code or no internet connection.');
@@ -48,48 +49,104 @@ document.getElementById('unlink-btn').addEventListener('click', async () => {
   showSetupView();
 });
 
+document.getElementById('clear-btn')?.addEventListener('click', async () => {
+  await chrome.storage.local.set({ pendingScrolls: {} });
+  syncedCount = 0;
+  updateDisplay();
+});
+
+document.getElementById('sync-now-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('sync-now-btn');
+  btn.textContent = 'Syncing…';
+  btn.disabled = true;
+  try {
+    await chrome.runtime.sendMessage({ type: 'FORCE_FLUSH' });
+    const { nudgeSyncId } = await chrome.storage.local.get(['nudgeSyncId']);
+    if (nudgeSyncId) await fetchFirebaseCount(nudgeSyncId);
+  } finally {
+    btn.textContent = 'Sync Now';
+    btn.disabled = false;
+  }
+});
+
 // ─── Linked view ──────────────────────────────────────────────────────────────
 async function showLinkedView(syncId) {
   setupView.style.display  = 'none';
   linkedView.style.display = 'block';
 
+  await fetchFirebaseCount(syncId);
+  updateDisplay();
+
+  // Refresh Firebase count every 10s, pending every 2s
+  if (refreshTimer) clearInterval(refreshTimer);
+  let tick = 0;
+  refreshTimer = setInterval(async () => {
+    tick++;
+    updateDisplay();                          // always update pending immediately
+    if (tick % 5 === 0) await fetchFirebaseCount(syncId); // Firebase every 10s
+  }, 2000);
+}
+
+// ─── Fetch synced count from Firebase (updates syncedCount) ──────────────────
+async function fetchFirebaseCount(syncId) {
   const today = todayString();
   try {
     const res  = await fetch(`${FIREBASE_DB_URL}/users/${syncId}/laptop/${today}.json`);
     const data = res.ok ? await res.json() : null;
 
     if (data) {
-      laptopCount.textContent = data.laptop_count ?? 0;
+      syncedCount = data.laptop_count ?? 0;
 
       const ts = data.synced_at;
-      lastSynced.textContent  = ts
-        ? `Last synced ${timeSince(ts)}`
-        : 'Not yet synced today';
+      lastSynced.textContent = ts ? `Last synced ${timeSince(ts)}` : 'Not yet synced today';
 
-      // Domain breakdown
       if (data.domains) {
         const sorted = Object.entries(data.domains).sort((a, b) => b[1] - a[1]);
         domainBreak.innerHTML = sorted.map(([domain, count]) => `
           <div class="domain-row">
-            <span class="domain-name">${domain}</span>
+            <span class="domain-name">${domain.replace(/_/g, '.')}</span>
             <span class="domain-count">${count}</span>
           </div>
         `).join('');
       }
-
-      syncStatus.textContent = '●  Synced';
-      syncStatus.style.color = '#2dd4bf';
     } else {
-      laptopCount.textContent = '0';
-      lastSynced.textContent  = 'No data yet today';
-      syncStatus.textContent  = '●  Waiting for first scroll';
-      syncStatus.style.color  = '#64748b';
+      syncedCount = 0;
+      lastSynced.textContent = 'No data yet today';
     }
   } catch (e) {
-    laptopCount.textContent = '?';
-    syncStatus.textContent  = '●  Offline';
-    syncStatus.style.color  = '#f87171';
+    // keep last known syncedCount on network error
   }
+}
+
+// ─── Update the displayed count = synced (storage) + pending ─────────────────
+function updateDisplay() {
+  const today = todayString();
+  chrome.storage.local.get(['pendingScrolls', 'syncedCounts'], ({ pendingScrolls, syncedCounts }) => {
+    const synced  = (syncedCounts ?? {})[today] ?? 0;
+    const pending = pendingScrolls
+      ? Object.entries(pendingScrolls)
+          .filter(([key]) => key.startsWith(today))
+          .reduce((sum, [, v]) => sum + v, 0)
+      : 0;
+
+    const total = synced + pending;
+    laptopCount.textContent = total;
+
+    if (pending > 0) {
+      pendingStatus.textContent   = `⏳ ${pending} pending sync`;
+      pendingStatus.style.display = 'block';
+      syncStatus.textContent      = '●  Tracking';
+      syncStatus.style.color      = '#2dd4bf';
+    } else if (synced > 0) {
+      pendingStatus.style.display = 'none';
+      syncStatus.textContent      = '●  Synced';
+      syncStatus.style.color      = '#2dd4bf';
+    } else {
+      pendingStatus.style.display = 'none';
+      syncStatus.textContent      = '●  Waiting for first scroll';
+      syncStatus.style.color      = '#64748b';
+    }
+  });
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -105,8 +162,8 @@ function timeSince(epochMs) {
 }
 
 function showError(msg) {
-  errorMsg.textContent    = msg;
-  errorMsg.style.display  = 'block';
+  errorMsg.textContent   = msg;
+  errorMsg.style.display = 'block';
 }
 
 function hideError() {

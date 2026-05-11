@@ -75,7 +75,7 @@ fun MainScreen(factory: ScrollViewModelFactory) {
     val appBreakdown by vm.appBreakdown.collectAsState()
 
     // Laptop sync
-    val syncCode        = remember { vm.syncCode }
+    val syncCode        by vm.syncCode.collectAsState()
     val laptopCount     by vm.laptopCount.collectAsState()
     val totalScrollCount by vm.totalScrollCount.collectAsState()
 

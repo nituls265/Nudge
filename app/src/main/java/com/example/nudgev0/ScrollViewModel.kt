@@ -33,7 +33,7 @@ class ScrollViewModel(
 
     // ── Laptop sync (Firebase Realtime Database) ──────────────────────────────
 
-    val syncCode: String get() = FirebaseSyncManager.getSyncCode(appContext)
+    val syncCode: StateFlow<String> = FirebaseSyncManager.syncCodeFlow
 
     private val today get() = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
 

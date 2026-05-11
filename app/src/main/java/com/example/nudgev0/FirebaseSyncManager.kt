@@ -8,6 +8,8 @@ import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.tasks.await
@@ -19,15 +21,24 @@ object FirebaseSyncManager {
     private val auth = FirebaseAuth.getInstance()
     private val db   = FirebaseDatabase.getInstance()
 
+    // ── Reactive sync code — emits "—" until auth completes ──────────────────
+    private val _syncCodeFlow = MutableStateFlow("—")
+    val syncCodeFlow: StateFlow<String> = _syncCodeFlow
+
     // ── Init: sign in anonymously once, store the UID as the Sync Code ────────
     suspend fun init(context: Context) {
         try {
+            // If we already stored a UID from a previous launch, emit it immediately
+            val prefs = context.getSharedPreferences("NudgePrefs", Context.MODE_PRIVATE)
+            val stored = prefs.getString("FIREBASE_SYNC_ID", null)
+            if (stored != null) _syncCodeFlow.value = stored.take(12).uppercase()
+
             if (auth.currentUser == null) {
                 auth.signInAnonymously().await()
             }
             val uid = auth.currentUser?.uid ?: return
-            context.getSharedPreferences("NudgePrefs", Context.MODE_PRIVATE)
-                .edit().putString("FIREBASE_SYNC_ID", uid).apply()
+            prefs.edit().putString("FIREBASE_SYNC_ID", uid).apply()
+            _syncCodeFlow.value = uid.take(12).uppercase()
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -40,10 +51,12 @@ object FirebaseSyncManager {
         return uid.take(12).uppercase()
     }
 
-    // Full UID needed for Realtime Database path
-    private fun getSyncId(context: Context): String? =
-        context.getSharedPreferences("NudgePrefs", Context.MODE_PRIVATE)
-            .getString("FIREBASE_SYNC_ID", null)
+    // Use the same 12-char code shown in the UI — this is what the extension pastes in
+    private fun getSyncId(context: Context): String? {
+        val uid = context.getSharedPreferences("NudgePrefs", Context.MODE_PRIVATE)
+            .getString("FIREBASE_SYNC_ID", null) ?: return null
+        return uid.take(12).uppercase()
+    }
 
     // ── Listen to laptop_count for today in real time ─────────────────────────
     fun laptopCountFlow(context: Context, date: String): Flow<Int> = callbackFlow {

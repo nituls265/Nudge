@@ -10,6 +10,8 @@ import androidx.activity.compose.setContent
 import androidx.compose.material3.Surface
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
@@ -28,8 +30,13 @@ class MainActivity : ComponentActivity() {
         NotificationHelper.createChannel(applicationContext)
         requestNotificationPermission()
 
+        // Firebase anonymous sign-in — generates the Sync Code used to link the Chrome extension
+        lifecycleScope.launch {
+            FirebaseSyncManager.init(applicationContext)
+        }
+
         val database = ScrollDatabase.getDatabase(applicationContext)
-        val viewModelFactory = ScrollViewModelFactory(database.scrollDao(), database.unlockDao(), database.appScrollDao())
+        val viewModelFactory = ScrollViewModelFactory(application, database.scrollDao(), database.unlockDao(), database.appScrollDao())
 
         setContent {
             Nudgev0Theme {
@@ -69,7 +76,9 @@ class MainActivity : ComponentActivity() {
     private fun recordFirstLaunchDate() {
         val prefs = getSharedPreferences("NudgePrefs", Context.MODE_PRIVATE)
         if (!prefs.contains("FIRST_LAUNCH_DATE")) {
-            prefs.edit().putLong("FIRST_LAUNCH_DATE", System.currentTimeMillis()).apply()
+            // Backdate by 8 days so beta users skip the calibration period on fresh install
+            val eightDaysAgo = System.currentTimeMillis() - 8 * 24 * 60 * 60 * 1000L
+            prefs.edit().putLong("FIRST_LAUNCH_DATE", eightDaysAgo).apply()
         }
     }
 

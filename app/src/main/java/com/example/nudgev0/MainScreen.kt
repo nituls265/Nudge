@@ -1,5 +1,7 @@
 package com.example.nudgev0
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -72,6 +74,11 @@ fun MainScreen(factory: ScrollViewModelFactory) {
     // App breakdown
     val appBreakdown by vm.appBreakdown.collectAsState()
 
+    // Laptop sync
+    val syncCode        = remember { vm.syncCode }
+    val laptopCount     by vm.laptopCount.collectAsState()
+    val totalScrollCount by vm.totalScrollCount.collectAsState()
+
     // UI state
     val isBubbleVisible by vm.isBubbleVisible.collectAsState()
     val isPaused        by vm.isPaused.collectAsState()
@@ -134,9 +141,12 @@ fun MainScreen(factory: ScrollViewModelFactory) {
                 MetricCard(
                     modifier    = Modifier.weight(1f),
                     label       = "Scrolls Today",
-                    value       = scrollCount.toString(),
-                    deltaText   = scrollChart.avgDeltaLabel(scrollCount),
-                    deltaUp     = scrollChart.isAboveAvg(scrollCount),
+                    value       = totalScrollCount.toString(),
+                    deltaText   = if (laptopCount > 0)
+                        "📱 $scrollCount  +  💻 $laptopCount"
+                    else
+                        scrollChart.avgDeltaLabel(scrollCount),
+                    deltaUp     = scrollChart.isAboveAvg(totalScrollCount),
                     accentColor = Green,
                     isActive    = selectedTab == "scrolls",
                     onClick     = { selectedTab = "scrolls" }
@@ -336,6 +346,10 @@ fun MainScreen(factory: ScrollViewModelFactory) {
                 }
             }
 
+            Spacer(Modifier.height(16.dp))
+
+            LaptopSyncCard(syncCode = syncCode, context = context)
+
             Spacer(Modifier.height(8.dp))
 
             TextButton(
@@ -503,6 +517,83 @@ fun LockBadge(modifier: Modifier = Modifier) {
             .background(MaterialTheme.colorScheme.outline, CircleShape),
         contentAlignment = Alignment.Center
     ) { Text("🔒", fontSize = 9.sp) }
+}
+
+@Composable
+private fun LaptopSyncCard(syncCode: String, context: Context) {
+    val Teal = Color(0xFF2DD4BF)
+    var copied by remember { mutableStateOf(false) }
+
+    LaunchedEffect(copied) {
+        if (copied) { delay(1500L); copied = false }
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape    = RoundedCornerShape(16.dp),
+        colors   = CardDefaults.cardColors(containerColor = Slate800)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                verticalAlignment    = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text("💻", fontSize = 16.sp)
+                Text(
+                    "Chrome Extension Sync",
+                    style      = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color      = MaterialTheme.colorScheme.onBackground
+                )
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Paste this code in the Nudge Chrome extension to sync laptop scrolls.",
+                style      = MaterialTheme.typography.bodySmall,
+                color      = Slate500,
+                lineHeight = 18.sp
+            )
+            Spacer(Modifier.height(12.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF0F172A), RoundedCornerShape(10.dp))
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment    = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                // Show sync code in groups of 4 for readability
+                Text(
+                    if (syncCode == "—") "Signing in…"
+                    else syncCode.chunked(4).joinToString("  "),
+                    style      = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 2.sp,
+                    color      = Teal
+                )
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Teal.copy(alpha = 0.15f))
+                        .clickable {
+                            if (syncCode != "—") {
+                                val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                cm.setPrimaryClip(ClipData.newPlainText("Nudge Sync Code", syncCode))
+                                copied = true
+                            }
+                        }
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        if (copied) "Copied ✓" else "Copy",
+                        style      = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color      = if (copied) Green else Teal
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable

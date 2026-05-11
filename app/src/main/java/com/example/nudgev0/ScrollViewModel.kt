@@ -1,6 +1,7 @@
 package com.example.nudgev0
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.nudgev0.data.AppScrollDao
 import com.example.nudgev0.data.ScrollDao
@@ -14,10 +15,13 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 class ScrollViewModel(
+    application: Application,
     private val scrollDao: ScrollDao,
     private val unlockDao: UnlockDao,
     private val appScrollDao: AppScrollDao
-) : ViewModel() {
+) : AndroidViewModel(application) {
+
+    private val appContext = application.applicationContext
 
     // ── Live state from the service ───────────────────────────────────────────
 
@@ -26,6 +30,20 @@ class ScrollViewModel(
     val isBubbleVisible:   StateFlow<Boolean> = MyAccessibilityService.isBubbleVisible
     val isPaused:          StateFlow<Boolean> = MyAccessibilityService.isPaused
     val interventionState: StateFlow<InterventionState> = MyAccessibilityService.interventionState
+
+    // ── Laptop sync (Firebase Realtime Database) ──────────────────────────────
+
+    val syncCode: String get() = FirebaseSyncManager.getSyncCode(appContext)
+
+    private val today get() = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+
+    val laptopCount: StateFlow<Int> = FirebaseSyncManager
+        .laptopCountFlow(appContext, today)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    val totalScrollCount: StateFlow<Int> = combine(scrollCount, laptopCount) { phone, laptop ->
+        phone + laptop
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     val unlockCount:       StateFlow<Int>   = MyAccessibilityService.unlockCount
     val firstUnlockMs:     StateFlow<Long>  = MyAccessibilityService.firstUnlockMs
@@ -105,13 +123,24 @@ class ScrollViewModel(
                     combined[pkg] = (combined[pkg] ?: 0) + count
                 }
                 combined.entries
-                    .filter { it.key.isNotEmpty() && it.key != "unknown" || it.value > 0 }
+                    .filter { !isSystemPackage(it.key) }
                     .sortedByDescending { it.value }
                     .map { it.toPair() }
             }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private fun isSystemPackage(pkg: String): Boolean {
+        if (pkg.isEmpty() || pkg == "unknown") return true
+        val systemPrefixes = listOf(
+            "android",               // base Android OS ("Android")
+            "com.android.",          // System UI, launcher, settings, etc.
+            "com.google.android.",   // GMS, Play Services, etc.
+            "com.samsung.android.",  // Samsung system apps
+        )
+        return systemPrefixes.any { pkg == it || pkg.startsWith(it) }
+    }
 
     private fun filledDays(
         days: Int,

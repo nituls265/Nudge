@@ -1,0 +1,77 @@
+package com.example.nudgev0
+
+import android.content.Context
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.database.DataSnapshot
+import com.google.firebase.database.DatabaseError
+import com.google.firebase.database.FirebaseDatabase
+import com.google.firebase.database.ValueEventListener
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.tasks.await
+import java.text.SimpleDateFormat
+import java.util.*
+
+object FirebaseSyncManager {
+
+    private val auth = FirebaseAuth.getInstance()
+    private val db   = FirebaseDatabase.getInstance()
+
+    // ── Init: sign in anonymously once, store the UID as the Sync Code ────────
+    suspend fun init(context: Context) {
+        try {
+            if (auth.currentUser == null) {
+                auth.signInAnonymously().await()
+            }
+            val uid = auth.currentUser?.uid ?: return
+            context.getSharedPreferences("NudgePrefs", Context.MODE_PRIVATE)
+                .edit().putString("FIREBASE_SYNC_ID", uid).apply()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    // ── Sync Code: first 12 chars of UID, displayed in the app ───────────────
+    fun getSyncCode(context: Context): String {
+        val uid = context.getSharedPreferences("NudgePrefs", Context.MODE_PRIVATE)
+            .getString("FIREBASE_SYNC_ID", null) ?: return "—"
+        return uid.take(12).uppercase()
+    }
+
+    // Full UID needed for Realtime Database path
+    private fun getSyncId(context: Context): String? =
+        context.getSharedPreferences("NudgePrefs", Context.MODE_PRIVATE)
+            .getString("FIREBASE_SYNC_ID", null)
+
+    // ── Listen to laptop_count for today in real time ─────────────────────────
+    fun laptopCountFlow(context: Context, date: String): Flow<Int> = callbackFlow {
+        val syncId = getSyncId(context) ?: run { trySend(0); close(); return@callbackFlow }
+
+        val ref      = db.getReference("users/$syncId/laptop/$date/laptop_count")
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                trySend((snapshot.getValue(Long::class.java) ?: 0L).toInt())
+            }
+            override fun onCancelled(error: DatabaseError) {
+                trySend(0)
+            }
+        }
+
+        ref.addValueEventListener(listener)
+        awaitClose { ref.removeEventListener(listener) }
+    }.catch { emit(0) }
+
+    // ── Push today's phone count (called from ResetWorker + onStop) ──────────
+    // Uses a map update so it never touches laptop_count
+    fun pushPhoneCount(context: Context, date: String, phoneCount: Int) {
+        val syncId = getSyncId(context) ?: return
+
+        val ref = db.getReference("users/$syncId/phone/$date")
+        ref.setValue(mapOf(
+            "phone_count"        to phoneCount,
+            "phone_last_updated" to System.currentTimeMillis()
+        )).addOnFailureListener { it.printStackTrace() }
+    }
+}

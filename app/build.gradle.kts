@@ -47,6 +47,9 @@ dependencies {
     // Use the Firebase BOM to manage versions safely
     implementation(platform("com.google.firebase:firebase-bom:33.1.0"))
     implementation("com.google.firebase:firebase-analytics-ktx")
+    implementation("com.google.firebase:firebase-auth-ktx")
+    implementation("com.google.firebase:firebase-database-ktx")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
 
     val room_version = "2.6.1"
     implementation("androidx.work:work-runtime-ktx:2.9.0")

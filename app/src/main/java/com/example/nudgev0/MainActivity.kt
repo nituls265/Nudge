@@ -47,11 +47,30 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        checkAndResetIfDateChanged()
+    }
+
     override fun onStop() {
         super.onStop()
         val currentCount = MyAccessibilityService.scrollCount.value
         if (currentCount > 0) {
             AnalyticsHelper.logSessionSnapshot(currentCount)
+        }
+    }
+
+    // If the user opens the app after midnight before their first scroll,
+    // the accessibility service hasn't had a chance to detect the date change yet.
+    // Reset live counters here so the chart shows 0 for today, not yesterday's total.
+    private fun checkAndResetIfDateChanged() {
+        val prefs = getSharedPreferences("NudgePrefs", Context.MODE_PRIVATE)
+        val lastDate = prefs.getString("LAST_SCROLL_DATE", "") ?: ""
+        val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+            .format(java.util.Date())
+        if (lastDate.isNotEmpty() && lastDate != today) {
+            MyAccessibilityService.resetScrollCount()
+            MyAccessibilityService.resetUnlockCount()
         }
     }
 

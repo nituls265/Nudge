@@ -5,13 +5,12 @@ const linkedView  = document.getElementById('linked-view');
 const setupView   = document.getElementById('setup-view');
 const laptopCount = document.getElementById('laptop-count');
 const lastSynced  = document.getElementById('last-synced');
-const domainBreak = document.getElementById('domain-breakdown');
 const syncStatus  = document.getElementById('sync-status');
 const pendingStatus = document.getElementById('pending-status');
 const errorMsg    = document.getElementById('error-msg');
 
-let syncedCount   = 0;   // last known Firebase count
-let refreshTimer  = null;
+let syncedCount  = 0;
+let refreshTimer = null;
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 chrome.storage.local.get(['nudgeSyncId'], ({ nudgeSyncId }) => {
@@ -94,23 +93,9 @@ async function fetchFirebaseCount(syncId) {
     const res  = await fetch(`${FIREBASE_DB_URL}/users/${syncId}/laptop/${today}.json`);
     const data = res.ok ? await res.json() : null;
 
-    if (data) {
-      syncedCount = data.laptop_count ?? 0;
-
-      const ts = data.synced_at;
-      lastSynced.textContent = ts ? `Last synced ${timeSince(ts)}` : 'Not yet synced today';
-
-      if (data.domains) {
-        const sorted = Object.entries(data.domains).sort((a, b) => b[1] - a[1]);
-        domainBreak.innerHTML = sorted.map(([domain, count]) => `
-          <div class="domain-row">
-            <span class="domain-name">${domain.replace(/_/g, '.')}</span>
-            <span class="domain-count">${count}</span>
-          </div>
-        `).join('');
-      }
+    if (data?.synced_at) {
+      lastSynced.textContent = `Last synced ${timeSince(data.synced_at)}`;
     } else {
-      syncedCount = 0;
       lastSynced.textContent = 'No data yet today';
     }
   } catch (e) {
@@ -118,19 +103,18 @@ async function fetchFirebaseCount(syncId) {
   }
 }
 
-// ─── Update the displayed count = synced (storage) + pending ─────────────────
+// ─── Update the displayed count = synced + pending ───────────────────────────
 function updateDisplay() {
   const today = todayString();
   chrome.storage.local.get(['pendingScrolls', 'syncedCounts'], ({ pendingScrolls, syncedCounts }) => {
     const synced  = (syncedCounts ?? {})[today] ?? 0;
     const pending = pendingScrolls
       ? Object.entries(pendingScrolls)
-          .filter(([key]) => key.startsWith(today))
+          .filter(([k]) => k.startsWith(today))
           .reduce((sum, [, v]) => sum + v, 0)
       : 0;
 
-    const total = synced + pending;
-    laptopCount.textContent = total;
+    laptopCount.textContent = synced + pending;
 
     if (pending > 0) {
       pendingStatus.textContent   = `⏳ ${pending} pending sync`;

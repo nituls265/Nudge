@@ -107,19 +107,30 @@ async function flush() {
     byDate[date].domains[domain]   = (byDate[date].domains[domain] ?? 0) + count;
   }
 
+  const { syncedCounts } = await chrome.storage.local.get(['syncedCounts']);
   const results = await Promise.allSettled(
-    Object.entries(byDate).map(([date, data]) => pushToFirebase(nudgeSyncId, date, data))
+    Object.entries(byDate).map(([date, data]) => {
+      const alreadySynced = (syncedCounts ?? {})[date] ?? 0;
+      return pushToFirebase(nudgeSyncId, date, data, alreadySynced);
+    })
   );
 
   const allOk = results.every(r => r.status === 'fulfilled' && r.value);
   if (allOk) {
-    // Persist synced counts by date so badge survives service worker restarts
-    const { syncedCounts } = await chrome.storage.local.get(['syncedCounts']);
-    const updated = syncedCounts ?? {};
+    const { syncedCounts, syncedDomains } = await chrome.storage.local.get(['syncedCounts', 'syncedDomains']);
+    const updCounts  = syncedCounts  ?? {};
+    const updDomains = syncedDomains ?? {};
     for (const [date, data] of Object.entries(byDate)) {
-      updated[date] = (updated[date] ?? 0) + data.total;
+      // Accumulate total
+      updCounts[date] = (updCounts[date] ?? 0) + data.total;
+      // Accumulate per-domain breakdown
+      if (!updDomains[date]) updDomains[date] = {};
+      for (const [domain, count] of Object.entries(data.domains)) {
+        const key = domain.replace(/\./g, '_');
+        updDomains[date][key] = (updDomains[date][key] ?? 0) + count;
+      }
     }
-    await chrome.storage.local.set({ pendingScrolls: {}, syncedCounts: updated });
+    await chrome.storage.local.set({ pendingScrolls: {}, syncedCounts: updCounts, syncedDomains: updDomains });
     console.log('[Nudge] Synced to Firebase:', byDate);
   } else {
     console.warn('[Nudge] Some Firebase writes failed — will retry next alarm.');
@@ -133,18 +144,10 @@ async function flush() {
 //   laptop_count  → total scrolls from laptop (accumulated via server increment trick)
 //   domains       → breakdown per site
 //   synced_at     → epoch ms
-async function pushToFirebase(syncId, date, data) {
-  // First read current laptop_count so we can add to it (RTDB has no server increment)
-  const readUrl  = `${FIREBASE_DB_URL}/users/${syncId}/laptop/${date}/laptop_count.json`;
-  const readRes  = await fetch(readUrl);
-  if (!readRes.ok) {
-    const body = await readRes.text();
-    console.error(`[Nudge] READ failed ${readRes.status} for syncId="${syncId}":`, body);
-    return false;
-  }
-  const existing = (await readRes.json()) ?? 0;
-
-  // Firebase forbids '.' in key names — replace with '_' (youtube.com → youtube_com)
+// alreadySynced = what this extension has already confirmed pushed today (from local storage)
+// This avoids reading stale Firebase data from other sessions/reinstalls
+async function pushToFirebase(syncId, date, data, alreadySynced = 0) {
+  // Firebase forbids '.' in key names
   const sanitizedDomains = {};
   for (const [domain, count] of Object.entries(data.domains)) {
     sanitizedDomains[domain.replace(/\./g, '_')] = count;
@@ -152,7 +155,7 @@ async function pushToFirebase(syncId, date, data) {
 
   const writeUrl = `${FIREBASE_DB_URL}/users/${syncId}/laptop/${date}.json`;
   const payload  = {
-    laptop_count: existing + data.total,
+    laptop_count: alreadySynced + data.total,
     domains:      sanitizedDomains,
     synced_at:    Date.now(),
   };
@@ -169,6 +172,6 @@ async function pushToFirebase(syncId, date, data) {
     return false;
   }
 
-  console.log(`[Nudge] Pushed ${data.total} scrolls to Firebase. syncId="${syncId}", date=${date}`);
+  console.log(`[Nudge] Pushed total=${alreadySynced + data.total} to Firebase (${data.total} new)`);
   return true;
 }

@@ -882,7 +882,7 @@ private fun AppBreakdownSection(entries: List<Pair<String, Int>>) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            "APP BREAKDOWN",
+            "SCROLL SOURCES",
             style = MaterialTheme.typography.labelSmall,
             color = Slate400,
             fontSize = 10.sp,
@@ -965,6 +965,7 @@ private fun AppBreakdownSection(entries: List<Pair<String, Int>>) {
 
 private fun resolveAppName(pm: PackageManager, packageName: String): String {
     if (packageName == "unknown" || packageName.isEmpty()) return "Other"
+    if (packageName == "laptop") return "💻 Laptop (Chrome)"
     return try {
         val info = pm.getApplicationInfo(packageName, 0)
         pm.getApplicationLabel(info).toString()

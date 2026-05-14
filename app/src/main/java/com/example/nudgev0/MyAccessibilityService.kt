@@ -364,6 +364,9 @@ class MyAccessibilityService : AccessibilityService() {
     // ── Intervention check ────────────────────────────────────────────────────
 
     private fun checkIntervention(count: Int) {
+        // Only intervene if the user has opted in by enabling the bubble
+        if (!_isBubbleVisible.value) return
+
         val velocity = _scrollTimestamps.value.size
 
         when (_interventionState.value) {
@@ -385,11 +388,17 @@ class MyAccessibilityService : AccessibilityService() {
             InterventionState.Level2 -> {
                 if (count - interventionScrollBase >= ESCALATION_THRESHOLD) {
                     _interventionState.value = InterventionState.Level3
-                    val intent = Intent(applicationContext, InterventionActivity::class.java).apply {
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    try {
+                        val intent = Intent(applicationContext, InterventionActivity::class.java).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                        }
+                        applicationContext.startActivity(intent)
+                        AnalyticsHelper.logInterventionTriggered(3)
+                    } catch (e: Exception) {
+                        // Activity launch failed (background launch restriction on Android 12+)
+                        // Fall back gracefully — stay at Level3 state without the overlay
+                        e.printStackTrace()
                     }
-                    applicationContext.startActivity(intent)
-                    AnalyticsHelper.logInterventionTriggered(3)
                 }
             }
             else -> {}
@@ -417,6 +426,17 @@ class MyAccessibilityService : AccessibilityService() {
 
         val className = event.className?.toString() ?: ""
         if (className.contains("EditText", ignoreCase = true)) return
+
+        // API 28+: filter out zero-delta scroll events (programmatic reflows, auto-scroll, etc.)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+            if (event.scrollDeltaX == 0 && event.scrollDeltaY == 0) return
+        }
+
+        // Pre-API 28: apply a stricter debounce for WebView (web pages auto-scroll constantly)
+        val isWebView = className.contains("WebView", ignoreCase = true)
+        if (isWebView && android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.P) {
+            if (now - lastScrollEventTime < 800) return
+        }
 
         val currentItemCount = event.itemCount
         if (currentItemCount > 0) {
@@ -459,7 +479,7 @@ class MyAccessibilityService : AccessibilityService() {
         // Trim the rolling 5-min window and append current timestamp atomically
         _scrollTimestamps.update { list -> list.filter { it > now - 5 * 60_000L } + now }
 
-        checkIntervention(newCount)
+        try { checkIntervention(newCount) } catch (e: Exception) { e.printStackTrace() }
 
         val currentHour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
         hourlyScrollCounts[currentHour] = (hourlyScrollCounts[currentHour] ?: 0) + 1

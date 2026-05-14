@@ -45,6 +45,11 @@ class ScrollViewModel(
         phone + laptop
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
+    // All laptop counts keyed by date — used for historical chart and breakdown
+    val laptopHistory: StateFlow<Map<String, Int>> = FirebaseSyncManager
+        .laptopHistoryFlow(appContext)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+
     val unlockCount:       StateFlow<Int>   = MyAccessibilityService.unlockCount
     val firstUnlockMs:     StateFlow<Long>  = MyAccessibilityService.firstUnlockMs
     val lastUnlockMs:      StateFlow<Long>  = MyAccessibilityService.lastUnlockMs
@@ -66,13 +71,21 @@ class ScrollViewModel(
         val cal = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -days + 1) }
         val startDate = sdf.format(cal.time)
 
-        scrollDao.getHistorySince(startDate).combine(MyAccessibilityService.scrollCount) { raw, liveCount ->
-            val map = raw.associateBy { it.date }.toMutableMap()
-            val today = sdf.format(Date())
-            map[today] = ScrollDay(today, liveCount)
-            filledDays(days, sdf, map) { ScrollDay(it, 0) }
-                .let { if (days == 90) weeklyAverage(it) else it }
-        }
+        scrollDao.getHistorySince(startDate)
+            .combine(MyAccessibilityService.scrollCount) { raw, liveCount -> Pair(raw, liveCount) }
+            .combine(laptopHistory) { (raw, liveCount), laptopMap ->
+                val today = sdf.format(Date())
+                val map   = raw.associateBy { it.date }.toMutableMap()
+                // Today: phone live + laptop synced
+                map[today] = ScrollDay(today, liveCount + (laptopMap[today] ?: 0))
+                filledDays(days, sdf, map) { ScrollDay(it, 0) }
+                    // Add laptop counts for historical days
+                    .map { day ->
+                        if (day.date == today) day
+                        else ScrollDay(day.date, day.count + (laptopMap[day.date] ?: 0))
+                    }
+                    .let { if (days == 90) weeklyAverage(it) else it }
+            }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // ── Unlock chart data ─────────────────────────────────────────────────────
@@ -118,10 +131,19 @@ class ScrollViewModel(
 
         appScrollDao.getTotalsBetween(start, today)
             .combine(MyAccessibilityService.appScrollCounts) { dbTotals, liveCounts ->
+                Pair(dbTotals, liveCounts)
+            }
+            .combine(laptopHistory) { (dbTotals, liveCounts), laptopMap ->
                 val combined = dbTotals.associate { it.packageName to it.total }.toMutableMap()
                 liveCounts.forEach { (pkg, count) ->
                     combined[pkg] = (combined[pkg] ?: 0) + count
                 }
+                // Sum laptop scrolls across the selected range
+                val laptopTotal = laptopMap.entries
+                    .filter { it.key >= start && it.key <= today }
+                    .sumOf { it.value }
+                if (laptopTotal > 0) combined["laptop"] = laptopTotal
+
                 combined.entries
                     .filter { !isSystemPackage(it.key) }
                     .sortedByDescending { it.value }

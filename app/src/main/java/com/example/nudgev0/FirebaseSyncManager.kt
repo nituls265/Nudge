@@ -58,6 +58,28 @@ object FirebaseSyncManager {
         return uid.take(12).uppercase()
     }
 
+    // ── Listen to ALL laptop counts (keyed by date) — for chart history ─────────
+    fun laptopHistoryFlow(context: Context): Flow<Map<String, Int>> = callbackFlow {
+        val syncId = getSyncId(context) ?: run { trySend(emptyMap()); close(); return@callbackFlow }
+
+        val ref      = db.getReference("users/$syncId/laptop")
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val map = mutableMapOf<String, Int>()
+                for (child in snapshot.children) {
+                    val date  = child.key ?: continue
+                    val count = child.child("laptop_count").getValue(Long::class.java)?.toInt() ?: 0
+                    if (count > 0) map[date] = count
+                }
+                trySend(map)
+            }
+            override fun onCancelled(error: DatabaseError) { trySend(emptyMap()) }
+        }
+
+        ref.addValueEventListener(listener)
+        awaitClose { ref.removeEventListener(listener) }
+    }.catch { emit(emptyMap()) }
+
     // ── Listen to laptop_count for today in real time ─────────────────────────
     fun laptopCountFlow(context: Context, date: String): Flow<Int> = callbackFlow {
         val syncId = getSyncId(context) ?: run { trySend(0); close(); return@callbackFlow }

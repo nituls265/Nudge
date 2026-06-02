@@ -101,14 +101,49 @@ class MyAccessibilityService : AccessibilityService() {
         _unlockCount.value        = if (isStale) 0 else prefs.getInt("CURRENT_UNLOCK_COUNT", 0)
         _firstUnlockMs.value      = if (isStale) 0L else prefs.getLong("TODAY_FIRST_UNLOCK_MS", 0L)
         _lastUnlockMs.value       = if (isStale) 0L else prefs.getLong("TODAY_LAST_UNLOCK_MS", 0L)
-        _avgSessionMin.value      = prefs.getFloat("TODAY_AVG_SESSION_MIN", 0f)
-        _longestSessionMin.value  = prefs.getInt("TODAY_LONGEST_SESSION_MIN", 0)
+        _avgSessionMin.value      = if (isStale) 0f else prefs.getFloat("TODAY_AVG_SESSION_MIN", 0f)
+        _longestSessionMin.value  = if (isStale) 0  else prefs.getInt("TODAY_LONGEST_SESSION_MIN", 0)
+
+        // Guard: if firstUnlockMs is from a previous day the unlock state is stale
+        // (ResetWorker missed midnight). Reset it so screen-time doesn't carry over.
+        if (!isStale && _firstUnlockMs.value > 0L) {
+            val firstUnlockDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                .format(Date(_firstUnlockMs.value))
+            if (firstUnlockDate != currentDayString) {
+                _unlockCount.value       = 0
+                _firstUnlockMs.value     = 0L
+                _lastUnlockMs.value      = 0L
+                _avgSessionMin.value     = 0f
+                _longestSessionMin.value = 0
+                prefs.edit()
+                    .putInt("CURRENT_UNLOCK_COUNT", 0)
+                    .putLong("SESSION_START_MS", 0L)
+                    .putLong("TODAY_FIRST_UNLOCK_MS", 0L)
+                    .putLong("TODAY_LAST_UNLOCK_MS", 0L)
+                    .putLong("TODAY_TOTAL_SESSION_MS", 0L)
+                    .putInt("TODAY_COMPLETED_SESSIONS", 0)
+                    .putFloat("TODAY_AVG_SESSION_MIN", 0f)
+                    .putInt("TODAY_LONGEST_SESSION_MIN", 0)
+                    .apply()
+            }
+        }
+
+        // Stamp today as the active date immediately.
+        // ResetWorker sets LAST_SCROLL_DATE = yesterday at midnight; without this,
+        // any mid-day service restart sees isStale=true and wipes today's count.
+        prefs.edit().putString("LAST_SCROLL_DATE", currentDayString).apply()
 
         serviceScope.launch(Dispatchers.IO) {
             try {
                 val dao = ScrollDatabase.getDatabase(applicationContext)
+                // Always prefer the DB entry for today — it is saved every 2 s
+                // and survives a force-stop better than in-memory SharedPrefs.
                 dao.scrollDao().getDay(currentDayString)?.let { today ->
-                    if (today.count > savedScrollCount) _scrollCount.value = today.count
+                    if (today.count > _scrollCount.value) {
+                        _scrollCount.value = today.count
+                        // Sync SharedPrefs so the next restart gets this value
+                        prefs.edit().putInt("CURRENT_SCROLL_COUNT", today.count).apply()
+                    }
                 }
                 dao.scrollDao().getHoursForDate(currentDayString)
                     .forEach { hourlyScrollCounts[it.hour] = it.count }
@@ -427,15 +462,30 @@ class MyAccessibilityService : AccessibilityService() {
         val className = event.className?.toString() ?: ""
         if (className.contains("EditText", ignoreCase = true)) return
 
-        // API 28+: filter out zero-delta scroll events (programmatic reflows, auto-scroll, etc.)
+        val isWebView = className.contains("WebView", ignoreCase = true)
+        val isBrowser = packageName == "com.android.chrome"         ||
+                        packageName == "org.mozilla.firefox"        ||
+                        packageName == "com.microsoft.emmx"         ||
+                        packageName == "com.brave.browser"          ||
+                        packageName == "com.sec.android.app.sbrowser" ||
+                        packageName.startsWith("com.opera")
+
+        // API 28+: filter zero-delta events from programmatic reflows / auto-scroll.
+        // Exception: browsers don't reliably populate scrollDelta — Chrome's Blink
+        // renderer fires genuine user-scroll events with both deltas at 0.
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
-            if (event.scrollDeltaX == 0 && event.scrollDeltaY == 0) return
+            if (!isWebView && !isBrowser && event.scrollDeltaX == 0 && event.scrollDeltaY == 0) return
+            // Purely horizontal scroll = chart scrubbing, carousel, image gallery.
+            // This is never the infinite-feed behaviour we track, so skip it for all
+            // apps (including browsers). Chrome vertical scrolls that Blink fires with
+            // both deltas = 0 are unaffected because that condition is X==0 && Y==0.
+            if (event.scrollDeltaX != 0 && event.scrollDeltaY == 0) return
         }
 
-        // Pre-API 28: apply a stricter debounce for WebView (web pages auto-scroll constantly)
-        val isWebView = className.contains("WebView", ignoreCase = true)
-        if (isWebView && android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.P) {
-            if (now - lastScrollEventTime < 800) return
+        // Pre-API 28 (or for browsers on any API): debounce WebView/browser events
+        // because some engines fire one event per pixel of scroll distance.
+        if (isWebView || isBrowser) {
+            if (now - lastScrollEventTime < 600) return
         }
 
         val currentItemCount = event.itemCount
@@ -470,6 +520,19 @@ class MyAccessibilityService : AccessibilityService() {
                 } catch (e: Exception) { e.printStackTrace() }
             }
             resetScrollCount(); hourlyScrollCounts.clear()
+
+            // Also reset unlock/session state if ResetWorker missed midnight
+            resetUnlockCount(); hourlyUnlockCounts.clear()
+            getSharedPreferences("NudgePrefs", Context.MODE_PRIVATE).edit()
+                .putInt("CURRENT_UNLOCK_COUNT", 0)
+                .putLong("SESSION_START_MS", 0L)
+                .putLong("TODAY_FIRST_UNLOCK_MS", 0L)
+                .putLong("TODAY_LAST_UNLOCK_MS", 0L)
+                .putLong("TODAY_TOTAL_SESSION_MS", 0L)
+                .putInt("TODAY_COMPLETED_SESSIONS", 0)
+                .putFloat("TODAY_AVG_SESSION_MIN", 0f)
+                .putInt("TODAY_LONGEST_SESSION_MIN", 0)
+                .apply()
         }
         currentDayString = today
 

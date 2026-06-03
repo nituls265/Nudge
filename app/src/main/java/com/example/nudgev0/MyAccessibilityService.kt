@@ -486,6 +486,12 @@ class MyAccessibilityService : AccessibilityService() {
         // because some engines fire one event per pixel of scroll distance.
         if (isWebView || isBrowser) {
             if (now - lastScrollEventTime < 600) return
+            // If the page scroll position hasn't moved (both X and Y are 0), the gesture
+            // was absorbed by an embedded component — a stock chart, map, canvas, etc.
+            // Real feed scrolling always changes the page's scrollY away from 0.
+            // We accept missing the very first swipe from the absolute top of a page
+            // in exchange for not counting chart scrubbing / embedded widget interaction.
+            if (event.scrollX == 0 && event.scrollY == 0) return
         }
 
         val currentItemCount = event.itemCount

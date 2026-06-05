@@ -544,28 +544,37 @@ class MyAccessibilityService : AccessibilityService() {
                         packageName == "com.sec.android.app.sbrowser" ||
                         packageName.startsWith("com.opera")
 
-        // API 28+: filter zero-delta events from programmatic reflows / auto-scroll.
-        // Exception: browsers don't reliably populate scrollDelta — Chrome's Blink
-        // renderer fires genuine user-scroll events with both deltas at 0.
+        // API 28+: scroll deltas are only available on P+. Use them to drop
+        // events that aren't genuine vertical feed scrolling.
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+            // Zero-delta reflow / auto-scroll in native apps. Browsers are exempt
+            // because Chrome's Blink renderer fires real user scrolls with deltas 0.
             if (!isWebView && !isBrowser && event.scrollDeltaX == 0 && event.scrollDeltaY == 0) return
-            // Purely horizontal scroll = chart scrubbing, carousel, image gallery.
-            // This is never the infinite-feed behaviour we track, so skip it for all
-            // apps (including browsers). Chrome vertical scrolls that Blink fires with
-            // both deltas = 0 are unaffected because that condition is X==0 && Y==0.
+
+            // Purely horizontal = chart scrub / carousel / gallery — never feed scrolling.
             if (event.scrollDeltaX != 0 && event.scrollDeltaY == 0) return
+
+            // Absorbed-gesture signature inside a WebView/browser: NO usable delta
+            // (-1 is the "unknown" sentinel) AND the page never moved (position 0/0).
+            // That combination means an embedded widget ate the gesture — e.g.
+            // scrubbing a stock chart in Google Search results (cls=WebView,
+            // dX=-1 dY=-1 sX=0 sY=0).
+            //
+            // Crucially this no longer filters NORMAL browser scrolling: Chrome's
+            // compositor fires frequent FrameLayout events with a real delta
+            // (dY=265) at position 0/0 — those keep a usable delta so they count —
+            // and WebView events report a moved position (sY>0). The previous
+            // position-only check (scrollX==0 && scrollY==0) wrongly dropped the
+            // FrameLayout events, severely under-counting Chrome scrolling.
+            if ((isWebView || isBrowser) &&
+                event.scrollDeltaX == -1 && event.scrollDeltaY == -1 &&
+                event.scrollX == 0 && event.scrollY == 0) return
         }
 
-        // Pre-API 28 (or for browsers on any API): debounce WebView/browser events
-        // because some engines fire one event per pixel of scroll distance.
+        // Browser/WebView engines can fire one event per pixel of scroll distance —
+        // debounce so a single flick doesn't inflate the count.
         if (isWebView || isBrowser) {
             if (now - lastScrollEventTime < 600) return
-            // If the page scroll position hasn't moved (both X and Y are 0), the gesture
-            // was absorbed by an embedded component — a stock chart, map, canvas, etc.
-            // Real feed scrolling always changes the page's scrollY away from 0.
-            // We accept missing the very first swipe from the absolute top of a page
-            // in exchange for not counting chart scrubbing / embedded widget interaction.
-            if (event.scrollX == 0 && event.scrollY == 0) return
         }
 
         val currentItemCount = event.itemCount

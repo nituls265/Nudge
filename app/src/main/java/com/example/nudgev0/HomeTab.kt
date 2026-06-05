@@ -351,8 +351,6 @@ private fun MetricPill(label: String, value: String, color: Color) {
 
 @Composable
 private fun SubMetricBarsSection(score: WellnessScore) {
-    val tierColor = Color(score.tier.colorHex)
-
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
             "SCORE DRIVERS",
@@ -365,13 +363,14 @@ private fun SubMetricBarsSection(score: WellnessScore) {
 
         Spacer(Modifier.height(14.dp))
 
-        // Each ScoreComponent colours its bar green/amber/red based on
-        // how close the component is to its max — not just tier colour.
-        ScoreComponent("Scroll Volume",    score.scrollVolume,     30, tierColor)
-        ScoreComponent("Session Length",   score.sessionBehaviour, 20, tierColor)
-        ScoreComponent("Unlock Frequency", score.unlockFrequency,  15, tierColor)
-        ScoreComponent("Time Hygiene",     score.timeHygiene,      20, tierColor)
-        ScoreComponent("App Quality",      score.appQuality,       15, tierColor)
+        // Each bar is coloured by its own % of max, on the same tier scale as
+        // the overall score (see ScoreComponent), so good vs. weak drivers read
+        // at a glance.
+        ScoreComponent("Scroll Volume",    score.scrollVolume,     30)
+        ScoreComponent("Session Length",   score.sessionBehaviour, 20)
+        ScoreComponent("Unlock Frequency", score.unlockFrequency,  15)
+        ScoreComponent("Time Hygiene",     score.timeHygiene,      20)
+        ScoreComponent("App Quality",      score.appQuality,       15)
 
         // Flagged apps callout — only visible when relevant
         if (score.flaggedApps.isNotEmpty()) {

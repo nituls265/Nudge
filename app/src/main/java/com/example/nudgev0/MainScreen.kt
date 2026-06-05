@@ -789,7 +789,7 @@ internal fun AppBreakdownSection(entries: List<Pair<String, Int>>) {
 
 @Composable
 internal fun ScoreComponent(
-    label: String, points: Int, maxPts: Int, color: Color, subLabel: String? = null
+    label: String, points: Int, maxPts: Int, subLabel: String? = null
 ) {
     val fill    = (points.toFloat() / maxPts).coerceIn(0f, 1f)
     val animFill by animateFloatAsState(
@@ -797,12 +797,14 @@ internal fun ScoreComponent(
         animationSpec = tween(700),
         label         = "component_$label"
     )
-    // Colour the bar by health: green → amber → red as score drops
-    val barColor = when {
-        fill >= 0.75f -> color
-        fill >= 0.40f -> Color(0xFFFBBF24)  // amber
-        else          -> Red
-    }
+    // Colour each driver by ITS OWN health, mapped onto the SAME 5-tier scale the
+    // overall wellness score uses (🌿green ≥85 · ✨blue ≥70 · 🌊yellow ≥50 ·
+    // ⚡orange ≥30 · 🔴red). Reusing WellnessTier keeps the colour language
+    // identical to the score ring + tier-scale bar above, so a glance tells you
+    // which drivers are strong and which are dragging the score down.
+    val pct      = points * 100 / maxPts
+    val barColor = Color(WellnessTier.from(pct).colorHex)
+    val isFull   = points == maxPts
 
     Column(modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)) {
         Row(
@@ -825,9 +827,9 @@ internal fun ScoreComponent(
             Text(
                 "$points/$maxPts",
                 style      = MaterialTheme.typography.labelSmall,
-                color      = if (points == maxPts) color else Slate500,
+                color      = if (isFull) barColor else Slate500,
                 fontSize   = 10.sp,
-                fontWeight = if (points == maxPts) FontWeight.Bold else FontWeight.Normal,
+                fontWeight = if (isFull) FontWeight.Bold else FontWeight.Normal,
                 modifier   = Modifier.width(32.dp),
                 textAlign  = TextAlign.End
             )

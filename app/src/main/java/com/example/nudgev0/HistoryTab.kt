@@ -226,16 +226,14 @@ private fun WellnessDayBreakdown(point: WellnessHistoryPoint) {
         todayScrolls     = 0,
         baselineScrolls  = 0
     )
-    val tierColor = Color(score.tier.colorHex)
-
     Column(modifier = Modifier.fillMaxWidth()) {
         SectionLabel("BREAKDOWN")
         Spacer(Modifier.height(10.dp))
-        ScoreComponent("Scroll Volume",    score.scrollVolume,     30, tierColor)
-        ScoreComponent("Session Length",   score.sessionBehaviour, 20, tierColor)
-        ScoreComponent("Unlock Frequency", score.unlockFrequency,  15, tierColor)
-        ScoreComponent("Time Hygiene",     score.timeHygiene,      20, tierColor)
-        ScoreComponent("App Quality",      score.appQuality,       15, tierColor)
+        ScoreComponent("Scroll Volume",    score.scrollVolume,     30)
+        ScoreComponent("Session Length",   score.sessionBehaviour, 20)
+        ScoreComponent("Unlock Frequency", score.unlockFrequency,  15)
+        ScoreComponent("Time Hygiene",     score.timeHygiene,      20)
+        ScoreComponent("App Quality",      score.appQuality,       15)
     }
 }
 

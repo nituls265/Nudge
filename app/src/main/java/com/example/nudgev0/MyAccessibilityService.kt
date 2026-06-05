@@ -8,6 +8,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.Color
 import android.graphics.PixelFormat
+import android.media.AudioManager
 import android.util.DisplayMetrics
 import android.view.*
 import android.view.accessibility.AccessibilityEvent
@@ -54,6 +55,16 @@ class MyAccessibilityService : AccessibilityService() {
     private var lastUnlockSaveTime = 0L
     private val hourlyUnlockCounts = java.util.concurrent.ConcurrentHashMap<Int, Int>()
 
+    // ── Call / communication exclusion ────────────────────────────────────────
+    // AudioManager.MODE_IN_CALL  covers native GSM/cellular calls.
+    // AudioManager.MODE_IN_COMMUNICATION covers VoIP: WhatsApp, Zoom, Meet, etc.
+    // Time spent in either mode is excluded from session length so video calls
+    // don't penalise the Session Behaviour wellness metric.
+    private lateinit var audioManager: AudioManager
+    private var sessionCallMs    = 0L   // accumulated call ms in the current session
+    private var callModeStartMs  = 0L   // when the current call segment started (0 = not in call)
+    private var audioPollingJob: Job? = null
+
     private val unlockReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
@@ -66,6 +77,7 @@ class MyAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+        audioManager  = getSystemService(AUDIO_SERVICE)  as AudioManager
         currentDayString = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
 
         val prefs = getSharedPreferences("NudgePrefs", Context.MODE_PRIVATE)
@@ -207,6 +219,11 @@ class MyAccessibilityService : AccessibilityService() {
 
         prefs.edit().putLong("SESSION_START_MS", now).apply()
 
+        // Reset call exclusion counters for this new session and start polling
+        sessionCallMs   = 0L
+        callModeStartMs = 0L
+        startCallModePolling()
+
         if (_firstUnlockMs.value == 0L) {
             _firstUnlockMs.value = now
             prefs.edit().putLong("TODAY_FIRST_UNLOCK_MS", now).apply()
@@ -225,18 +242,25 @@ class MyAccessibilityService : AccessibilityService() {
     }
 
     private fun onScreenOff() {
+        val now   = System.currentTimeMillis()
         val prefs = getSharedPreferences("NudgePrefs", Context.MODE_PRIVATE)
         val sessionStart = prefs.getLong("SESSION_START_MS", 0L)
         if (sessionStart == 0L) return
 
-        val durationMs   = System.currentTimeMillis() - sessionStart
-        val durationMin  = (durationMs / 60_000f)
+        // Stop audio polling and flush any in-progress call segment
+        stopCallModePolling(flushAt = now)
 
-        val totalMs     = prefs.getLong("TODAY_TOTAL_SESSION_MS", 0L) + durationMs
+        val rawDurationMs = now - sessionStart
+
+        // Subtract time spent on calls/video calls so they don't penalise the
+        // Session Behaviour metric.  Clamp to zero in case of any clock skew.
+        val billableDurationMs  = (rawDurationMs - sessionCallMs).coerceAtLeast(0L)
+        val billableDurationMin = billableDurationMs / 60_000f
+
+        val totalMs           = prefs.getLong("TODAY_TOTAL_SESSION_MS", 0L) + billableDurationMs
         val completedSessions = prefs.getInt("TODAY_COMPLETED_SESSIONS", 0) + 1
-        val newAvgMin   = (totalMs / completedSessions / 60_000f)
-
-        val newLongest = maxOf(_longestSessionMin.value, durationMin.toInt())
+        val newAvgMin         = (totalMs / completedSessions / 60_000f)
+        val newLongest        = maxOf(_longestSessionMin.value, billableDurationMin.toInt())
 
         _avgSessionMin.value     = newAvgMin
         _longestSessionMin.value = newLongest
@@ -251,6 +275,47 @@ class MyAccessibilityService : AccessibilityService() {
 
         val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
         saveUnlockToDatabase(today)
+    }
+
+    // ── Call-mode polling ─────────────────────────────────────────────────────
+    // Polls AudioManager every 8 seconds while a session is active.
+    // MODE_IN_CALL      = native GSM/cellular calls
+    // MODE_IN_COMMUNICATION = VoIP: WhatsApp, Zoom, Google Meet, FaceTime, Teams …
+    // Any time spent in either mode is accumulated in sessionCallMs and later
+    // subtracted from the session duration in onScreenOff().
+    //
+    // Battery cost: AudioManager.mode is a single binder read — negligible.
+    // 8-second resolution means worst-case ±8 s error on a 30-min call (~0.4%).
+
+    private fun startCallModePolling() {
+        audioPollingJob?.cancel()
+        audioPollingJob = serviceScope.launch {
+            while (true) {
+                val now      = System.currentTimeMillis()
+                val isInCall = audioManager.mode == AudioManager.MODE_IN_CALL ||
+                               audioManager.mode == AudioManager.MODE_IN_COMMUNICATION
+
+                if (isInCall) {
+                    if (callModeStartMs == 0L) callModeStartMs = now   // call just started
+                } else {
+                    if (callModeStartMs > 0L) {
+                        sessionCallMs  += (now - callModeStartMs)       // call just ended
+                        callModeStartMs = 0L
+                    }
+                }
+                delay(8_000L)
+            }
+        }
+    }
+
+    /** Cancel the polling job and flush any open call segment up to [flushAt]. */
+    private fun stopCallModePolling(flushAt: Long = System.currentTimeMillis()) {
+        audioPollingJob?.cancel()
+        audioPollingJob = null
+        if (callModeStartMs > 0L) {
+            sessionCallMs  += (flushAt - callModeStartMs)
+            callModeStartMs = 0L
+        }
     }
 
     private fun saveUnlockToDatabase(date: String) {
@@ -595,6 +660,7 @@ class MyAccessibilityService : AccessibilityService() {
     override fun onDestroy() {
         super.onDestroy()
         cooldownJob?.cancel()
+        audioPollingJob?.cancel()
         try { unregisterReceiver(unlockReceiver) } catch (e: Exception) { e.printStackTrace() }
         serviceScope.cancel()
     }

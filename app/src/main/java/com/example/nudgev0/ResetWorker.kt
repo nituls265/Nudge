@@ -3,13 +3,12 @@ package com.example.nudgev0
 import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import com.example.nudgev0.data.DayBoundary
 import com.example.nudgev0.data.NudgeRepository
 import com.example.nudgev0.data.ScrollDay
 import com.example.nudgev0.data.UnlockDay
 import com.example.nudgev0.data.WellnessDay
 import kotlinx.coroutines.flow.firstOrNull
-import java.text.SimpleDateFormat
-import java.util.*
 
 class ResetWorker(
     context: Context,
@@ -20,9 +19,8 @@ class ResetWorker(
         val repo  = NudgeRepository.get(applicationContext)
         val prefs = applicationContext.getSharedPreferences("NudgePrefs", Context.MODE_PRIVATE)
 
-        val sdf       = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-        val today     = sdf.format(Date())
-        val yesterday = sdf.format(Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -1) }.time)
+        val today     = DayBoundary.today()
+        val yesterday = DayBoundary.daysAgo(1)
 
         return try {
             // ── Scroll: DB is source of truth ─────────────────────────────────
@@ -74,7 +72,7 @@ class ResetWorker(
             // here would erase that unlock and make the next morning unlock appear "first".
             val existingFirstUnlockMs = prefs.getLong("TODAY_FIRST_UNLOCK_MS", 0L)
             val existingFirstUnlockDate = if (existingFirstUnlockMs > 0L)
-                sdf.format(Date(existingFirstUnlockMs)) else ""
+                DayBoundary.keyOf(existingFirstUnlockMs) else ""
             val userAlreadyUnlockedToday = existingFirstUnlockDate == today
 
             if (userAlreadyUnlockedToday) {
@@ -114,9 +112,7 @@ class ResetWorker(
                     .map { it.packageName to it.total }
 
                 // 7-day average: query 8 days back, exclude yesterday (which is "today" in this context)
-                val eightDaysBack = sdf.format(
-                    Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -8) }.time
-                )
+                val eightDaysBack = DayBoundary.daysAgo(8)
                 val sevenDayHistory = repo.scrollHistorySince(eightDaysBack)
                     .firstOrNull() ?: emptyList()
                 val pastCounts: List<Int> = sevenDayHistory

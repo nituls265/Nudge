@@ -16,9 +16,9 @@ import kotlinx.coroutines.launch
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import com.example.nudgev0.data.DayBoundary
 import com.example.nudgev0.data.NudgeRepository
 import com.example.nudgev0.ui.theme.Nudgev0Theme
-import java.util.Calendar
 import java.util.concurrent.TimeUnit
 
 class MainActivity : ComponentActivity() {
@@ -67,8 +67,7 @@ class MainActivity : ComponentActivity() {
     private fun checkAndResetIfDateChanged() {
         val prefs = getSharedPreferences("NudgePrefs", Context.MODE_PRIVATE)
         val lastDate = prefs.getString("LAST_SCROLL_DATE", "") ?: ""
-        val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
-            .format(java.util.Date())
+        val today = DayBoundary.today()
         if (lastDate.isNotEmpty() && lastDate != today) {
             MyAccessibilityService.resetScrollCount()
             MyAccessibilityService.resetUnlockCount()
@@ -112,15 +111,8 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun scheduleMidnightReset() {
-        val now = Calendar.getInstance()
-        val midnight = Calendar.getInstance().apply {
-            add(Calendar.DAY_OF_YEAR, 1)
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }
-        val delayUntilMidnight = midnight.timeInMillis - now.timeInMillis
+        val now = System.currentTimeMillis()
+        val delayUntilMidnight = DayBoundary.nextMidnightMillis(now) - now
 
         val resetWork = PeriodicWorkRequestBuilder<ResetWorker>(1, TimeUnit.DAYS)
             .setInitialDelay(delayUntilMidnight, TimeUnit.MILLISECONDS)

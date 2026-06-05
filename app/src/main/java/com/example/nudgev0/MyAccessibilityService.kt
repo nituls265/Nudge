@@ -14,15 +14,13 @@ import android.view.*
 import android.view.accessibility.AccessibilityEvent
 import android.view.animation.DecelerateInterpolator
 import android.widget.TextView
+import com.example.nudgev0.data.DayBoundary
 import com.example.nudgev0.data.NudgeRepository
 import com.example.nudgev0.data.UnlockDay
 import org.json.JSONObject
 import java.util.Calendar
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import kotlin.math.abs
 
 class MyAccessibilityService : AccessibilityService() {
@@ -54,11 +52,12 @@ class MyAccessibilityService : AccessibilityService() {
 
     // ── Hot-path caches (main-thread only) ────────────────────────────────────
     // onAccessibilityEvent runs on the main thread for EVERY scroll event.
-    // Re-constructing SimpleDateFormat/Calendar and serialising the app map to
-    // JSON on each event caused main-thread work and battery drain at high
-    // scroll velocity. These reused instances + memoised day bounds keep the
-    // hot path allocation-free. NOT thread-safe — only touch from main thread.
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+    // Re-deriving the day key and serialising the app map to JSON on each event
+    // caused main-thread work and battery drain at high scroll velocity. The
+    // memoised day bounds below mean the day key is only recomputed (via
+    // DayBoundary) once per day; within the day the hot path is allocation-free.
+    // `calendar` is reused only for cheap per-event hour-of-day extraction.
+    // NOT thread-safe — only touch from the main thread.
     private val calendar   = Calendar.getInstance()
     private var cachedDate     = ""
     private var dayStartMs     = 0L
@@ -91,7 +90,7 @@ class MyAccessibilityService : AccessibilityService() {
         super.onServiceConnected()
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         audioManager  = getSystemService(AUDIO_SERVICE)  as AudioManager
-        currentDayString = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        currentDayString = DayBoundary.today()
 
         val prefs = getSharedPreferences("NudgePrefs", Context.MODE_PRIVATE)
 
@@ -132,8 +131,7 @@ class MyAccessibilityService : AccessibilityService() {
         // Guard: if firstUnlockMs is from a previous day the unlock state is stale
         // (ResetWorker missed midnight). Reset it so screen-time doesn't carry over.
         if (!isStale && _firstUnlockMs.value > 0L) {
-            val firstUnlockDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-                .format(Date(_firstUnlockMs.value))
+            val firstUnlockDate = DayBoundary.keyOf(_firstUnlockMs.value)
             if (firstUnlockDate != currentDayString) {
                 _unlockCount.value       = 0
                 _firstUnlockMs.value     = 0L
@@ -216,7 +214,7 @@ class MyAccessibilityService : AccessibilityService() {
 
     private fun onPhoneUnlocked() {
         val now = System.currentTimeMillis()
-        val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        val today = DayBoundary.today()
 
         if (currentDayString.isNotEmpty() && currentDayString != today) {
             resetUnlockCount()
@@ -285,7 +283,7 @@ class MyAccessibilityService : AccessibilityService() {
             .putInt("TODAY_LONGEST_SESSION_MIN", newLongest)
             .apply()
 
-        val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        val today = DayBoundary.today()
         saveUnlockToDatabase(today)
     }
 
@@ -648,23 +646,18 @@ class MyAccessibilityService : AccessibilityService() {
     }
 
     /**
-     * Today's yyyy-MM-dd, recomputed only when [now] falls outside the cached
-     * day window [dayStartMs, nextMidnightMs). Removes SimpleDateFormat/Calendar
-     * allocation from the per-scroll hot path while still reacting immediately
-     * to a midnight rollover, manual clock change, or timezone shift (any of
-     * which moves [now] outside the window). Main-thread only.
+     * Today's yyyy-MM-dd key, recomputed only when [now] falls outside the cached
+     * day window [dayStartMs, nextMidnightMs). Keeps allocation out of the
+     * per-scroll hot path while still reacting immediately to a midnight rollover,
+     * manual clock change, or timezone shift (any of which moves [now] outside the
+     * window). The once-per-day recompute delegates to DayBoundary so the key
+     * format matches the ViewModel and ResetWorker exactly. Main-thread only.
      */
     private fun currentDate(now: Long): String {
         if (cachedDate.isEmpty() || now < dayStartMs || now >= nextMidnightMs) {
-            calendar.timeInMillis = now
-            calendar.set(Calendar.HOUR_OF_DAY, 0)
-            calendar.set(Calendar.MINUTE, 0)
-            calendar.set(Calendar.SECOND, 0)
-            calendar.set(Calendar.MILLISECOND, 0)
-            dayStartMs = calendar.timeInMillis
-            cachedDate = dateFormat.format(calendar.time)
-            calendar.add(Calendar.DAY_OF_YEAR, 1)
-            nextMidnightMs = calendar.timeInMillis
+            cachedDate     = DayBoundary.keyOf(now)
+            dayStartMs     = DayBoundary.startOfDayMillis(now)
+            nextMidnightMs = DayBoundary.nextMidnightMillis(now)
         }
         return cachedDate
     }

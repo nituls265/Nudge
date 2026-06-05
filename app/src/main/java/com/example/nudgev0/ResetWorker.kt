@@ -3,7 +3,7 @@ package com.example.nudgev0
 import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.example.nudgev0.data.ScrollDatabase
+import com.example.nudgev0.data.NudgeRepository
 import com.example.nudgev0.data.ScrollDay
 import com.example.nudgev0.data.UnlockDay
 import com.example.nudgev0.data.WellnessDay
@@ -17,7 +17,7 @@ class ResetWorker(
 ) : CoroutineWorker(context, workerParams) {
 
     override suspend fun doWork(): Result {
-        val db    = ScrollDatabase.getDatabase(applicationContext)
+        val repo  = NudgeRepository.get(applicationContext)
         val prefs = applicationContext.getSharedPreferences("NudgePrefs", Context.MODE_PRIVATE)
 
         val sdf       = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
@@ -26,11 +26,11 @@ class ResetWorker(
 
         return try {
             // ── Scroll: DB is source of truth ─────────────────────────────────
-            val dbScrollDay = db.scrollDao().getDay(yesterday)
+            val dbScrollDay = repo.scrollDay(yesterday)
             val scrollCount = dbScrollDay?.count
                 ?: prefs.getInt("CURRENT_SCROLL_COUNT", 0)
             if (dbScrollDay == null && scrollCount > 0) {
-                db.scrollDao().insertOrUpdate(ScrollDay(yesterday, scrollCount))
+                repo.upsertScrollDay(ScrollDay(yesterday, scrollCount))
             }
             AnalyticsHelper.logDailySummary(scrollCount)
 
@@ -48,7 +48,7 @@ class ResetWorker(
             }
 
             // ── Unlock: DB is source of truth ─────────────────────────────────
-            val dbUnlockDay = db.unlockDao().getDay(yesterday)
+            val dbUnlockDay = repo.unlockDay(yesterday)
             val unlockCount    = dbUnlockDay?.count             ?: prefs.getInt("CURRENT_UNLOCK_COUNT", 0)
             val firstUnlockMs  = dbUnlockDay?.firstUnlockMs     ?: prefs.getLong("TODAY_FIRST_UNLOCK_MS", 0L)
             val lastUnlockMs   = dbUnlockDay?.lastUnlockMs      ?: prefs.getLong("TODAY_LAST_UNLOCK_MS", 0L)
@@ -56,7 +56,7 @@ class ResetWorker(
             val longestSession = dbUnlockDay?.longestSessionMin ?: prefs.getInt("TODAY_LONGEST_SESSION_MIN", 0)
 
             if (dbUnlockDay == null) {
-                db.unlockDao().insertOrUpdate(
+                repo.upsertUnlockDay(
                     UnlockDay(
                         date              = yesterday,
                         count             = unlockCount,
@@ -102,12 +102,10 @@ class ResetWorker(
             MyAccessibilityService._appScrollCounts.value = emptyMap()
 
             // ── Wellness: compute final score for yesterday and persist ─────────
-            if (db.wellnessDao().getDay(yesterday) == null) {
-                // Build top-apps from yesterday's DB app scroll data
-                val appTotals = db.appScrollDao()
-                    // getTotalsBetween is a Flow — collect first value via first()
-                    // Since WorkManager runs in a coroutine we can call first() directly
-                    .getTotalsBetween(yesterday, sdf.format(Date()))
+            if (repo.wellnessDay(yesterday) == null) {
+                // Build top-apps from yesterday's DB app scroll data.
+                // appTotalsBetween is a Flow — collect the first value via firstOrNull().
+                val appTotals = repo.appTotalsBetween(yesterday, today)
                     .firstOrNull() ?: emptyList()
 
                 val topApps = appTotals
@@ -119,8 +117,7 @@ class ResetWorker(
                 val eightDaysBack = sdf.format(
                     Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -8) }.time
                 )
-                val sevenDayHistory = db.scrollDao()
-                    .getHistorySince(eightDaysBack)
+                val sevenDayHistory = repo.scrollHistorySince(eightDaysBack)
                     .firstOrNull() ?: emptyList()
                 val pastCounts: List<Int> = sevenDayHistory
                     .filter { it.date != yesterday }
@@ -138,7 +135,7 @@ class ResetWorker(
                     lastUnlockMs      = lastUnlockMs,
                     topApps           = topApps
                 )
-                db.wellnessDao().insertOrUpdate(
+                repo.upsertWellnessDay(
                     WellnessDay(
                         date             = yesterday,
                         score            = score.total,

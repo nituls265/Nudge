@@ -15,7 +15,7 @@ import kotlinx.coroutines.launch
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
-import com.example.nudgev0.data.ScrollDatabase
+import com.example.nudgev0.data.NudgeRepository
 import com.example.nudgev0.ui.theme.Nudgev0Theme
 import java.util.Calendar
 import java.util.concurrent.TimeUnit
@@ -35,8 +35,8 @@ class MainActivity : ComponentActivity() {
             FirebaseSyncManager.init(applicationContext)
         }
 
-        val database = ScrollDatabase.getDatabase(applicationContext)
-        val viewModelFactory = ScrollViewModelFactory(application, database.scrollDao(), database.unlockDao(), database.appScrollDao())
+        val repository = NudgeRepository.get(applicationContext)
+        val viewModelFactory = ScrollViewModelFactory(application, repository)
 
         setContent {
             Nudgev0Theme {

@@ -14,12 +14,8 @@ import android.view.*
 import android.view.accessibility.AccessibilityEvent
 import android.view.animation.DecelerateInterpolator
 import android.widget.TextView
-import com.example.nudgev0.data.AppScrollDay
-import com.example.nudgev0.data.ScrollDatabase
-import com.example.nudgev0.data.ScrollDay
-import com.example.nudgev0.data.ScrollHour
+import com.example.nudgev0.data.NudgeRepository
 import com.example.nudgev0.data.UnlockDay
-import com.example.nudgev0.data.UnlockHour
 import org.json.JSONObject
 import java.util.Calendar
 import kotlinx.coroutines.*
@@ -37,6 +33,11 @@ class MyAccessibilityService : AccessibilityService() {
 
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var currentDayString: String = ""
+
+    // Single persistence coordinator shared with the ViewModel + ResetWorker.
+    // `by lazy` defers construction until first use (inside IO coroutines, after
+    // the service is attached and applicationContext is valid).
+    private val repository by lazy { NudgeRepository.get(applicationContext) }
 
     // Intervention state
     private var interventionScrollBase = 0
@@ -159,19 +160,18 @@ class MyAccessibilityService : AccessibilityService() {
 
         serviceScope.launch(Dispatchers.IO) {
             try {
-                val dao = ScrollDatabase.getDatabase(applicationContext)
                 // Always prefer the DB entry for today — it is saved every 2 s
                 // and survives a force-stop better than in-memory SharedPrefs.
-                dao.scrollDao().getDay(currentDayString)?.let { today ->
+                repository.scrollDay(currentDayString)?.let { today ->
                     if (today.count > _scrollCount.value) {
                         _scrollCount.value = today.count
                         // Sync SharedPrefs so the next restart gets this value
                         prefs.edit().putInt("CURRENT_SCROLL_COUNT", today.count).apply()
                     }
                 }
-                dao.scrollDao().getHoursForDate(currentDayString)
+                repository.scrollHoursForDate(currentDayString)
                     .forEach { hourlyScrollCounts[it.hour] = it.count }
-                dao.unlockDao().getHoursForDate(currentDayString)
+                repository.unlockHoursForDate(currentDayString)
                     .forEach { hourlyUnlockCounts[it.hour] = it.count }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -347,11 +347,8 @@ class MyAccessibilityService : AccessibilityService() {
 
         serviceScope.launch(Dispatchers.IO) {
             try {
-                val dao = ScrollDatabase.getDatabase(applicationContext).unlockDao()
-                dao.insertOrUpdate(snapshot)
-                hourSnapshot.forEach { (hour, count) ->
-                    dao.insertOrUpdateHour(UnlockHour(date, hour, count))
-                }
+                // Atomic: unlock summary + hourly buckets written all-or-nothing.
+                repository.persistUnlockDay(snapshot, hourSnapshot)
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -592,14 +589,10 @@ class MyAccessibilityService : AccessibilityService() {
             val finalApps  = _appScrollCounts.value.toMap()
             serviceScope.launch(Dispatchers.IO) {
                 try {
-                    val db = ScrollDatabase.getDatabase(applicationContext)
-                    db.scrollDao().insertOrUpdate(ScrollDay(finalDate, finalCount))
-                    finalHours.forEach { (h, c) ->
-                        db.scrollDao().insertOrUpdateHour(ScrollHour(finalDate, h, c))
-                    }
-                    finalApps.forEach { (pkg, c) ->
-                        db.appScrollDao().insertOrUpdate(AppScrollDay(finalDate, pkg, c))
-                    }
+                    // Atomic: the final day's total + hours + per-app rows are
+                    // written all-or-nothing, so a crash at the rollover boundary
+                    // can never leave yesterday half-saved.
+                    repository.persistScrollDay(finalDate, finalCount, finalHours, finalApps)
                 } catch (e: Exception) { e.printStackTrace() }
             }
             resetScrollCount(); hourlyScrollCounts.clear()
@@ -675,19 +668,14 @@ class MyAccessibilityService : AccessibilityService() {
         val appSnapshot  = _appScrollCounts.value.toMap()
         serviceScope.launch(Dispatchers.IO) {
             try {
-                val db = ScrollDatabase.getDatabase(applicationContext)
-                db.scrollDao().insertOrUpdate(ScrollDay(date, count))
-                hourSnapshot.forEach { (hour, hourCount) ->
-                    db.scrollDao().insertOrUpdateHour(ScrollHour(date, hour, hourCount))
-                }
-                appSnapshot.forEach { (pkg, appCount) ->
-                    db.appScrollDao().insertOrUpdate(AppScrollDay(date, pkg, appCount))
-                }
-                // Crash-recovery snapshot to SharedPreferences — moved off the
-                // main thread and debounced with the DB save (2s). The DB rows
-                // above are the source of truth; onServiceConnected prefers them
-                // over prefs, so 2s granularity here is safe. JSON serialisation
-                // now happens on Dispatchers.IO instead of per-event on main.
+                // Atomic multi-table write via the repository.
+                repository.persistScrollDay(date, count, hourSnapshot, appSnapshot)
+
+                // Crash-recovery snapshot to SharedPreferences — off the main
+                // thread and debounced with the DB save (2s). The DB rows above
+                // are the source of truth; onServiceConnected prefers them over
+                // prefs, so 2s granularity here is safe. JSON serialisation now
+                // happens on Dispatchers.IO instead of per-event on main.
                 val appJson = JSONObject(appSnapshot as Map<*, *>).toString()
                 getSharedPreferences("NudgePrefs", Context.MODE_PRIVATE).edit()
                     .putInt("CURRENT_SCROLL_COUNT", count)

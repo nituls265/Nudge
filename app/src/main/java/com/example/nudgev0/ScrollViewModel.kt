@@ -3,13 +3,9 @@ package com.example.nudgev0
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.nudgev0.data.AppScrollDao
-import com.example.nudgev0.data.ScrollDao
+import com.example.nudgev0.data.NudgeRepository
 import com.example.nudgev0.data.ScrollDay
-import com.example.nudgev0.data.ScrollDatabase
-import com.example.nudgev0.data.UnlockDao
 import com.example.nudgev0.data.UnlockDay
-import com.example.nudgev0.data.WellnessDao
 import com.example.nudgev0.data.WellnessDay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -20,10 +16,7 @@ import java.util.*
 
 class ScrollViewModel(
     application: Application,
-    private val scrollDao: ScrollDao,
-    private val unlockDao: UnlockDao,
-    private val appScrollDao: AppScrollDao,
-    private val wellnessDao: WellnessDao
+    private val repo: NudgeRepository
 ) : AndroidViewModel(application) {
 
     private val appContext = application.applicationContext
@@ -82,7 +75,7 @@ class ScrollViewModel(
         val cal = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -days + 1) }
         val startDate = sdf.format(cal.time)
 
-        scrollDao.getHistorySince(startDate)
+        repo.scrollHistorySince(startDate)
             .combine(MyAccessibilityService.scrollCount) { raw, liveCount -> Pair(raw, liveCount) }
             .combine(laptopHistory) { (raw, liveCount), laptopMap ->
                 val today = sdf.format(Date())
@@ -105,7 +98,7 @@ class ScrollViewModel(
         val cal = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -days + 1) }
         val startDate = sdf.format(cal.time)
 
-        unlockDao.getHistorySince(startDate).combine(MyAccessibilityService.unlockCount) { raw, liveCount ->
+        repo.unlockHistorySince(startDate).combine(MyAccessibilityService.unlockCount) { raw, liveCount ->
             val map = raw.associate { it.date to ScrollDay(it.date, it.count) }.toMutableMap()
             val today = sdf.format(Date())
             map[today] = ScrollDay(today, liveCount)
@@ -133,7 +126,7 @@ class ScrollViewModel(
             MyAccessibilityService.unlockCount
         ) { avg, count -> (avg * count).toInt() }
 
-        unlockDao.getHistorySince(startDate).combine(liveScreenTime) { raw, liveMin ->
+        repo.unlockHistorySince(startDate).combine(liveScreenTime) { raw, liveMin ->
             val today = sdf.format(Date())
             val map = raw.associate { day ->
                 day.date to ScrollDay(day.date, (day.avgSessionMin * day.count).toInt())
@@ -150,14 +143,14 @@ class ScrollViewModel(
     val peakScrollHour: StateFlow<String> = _timeRange.flatMapLatest { days ->
         val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
         val start = sdf.format(Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -days + 1) }.time)
-        scrollDao.getPeakHourSince(start).map { it?.let { h -> formatHourRange(h.hour) } ?: "No data" }
+        repo.scrollPeakHourSince(start).map { it?.let { h -> formatHourRange(h.hour) } ?: "No data" }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "No data")
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val peakUnlockHour: StateFlow<String> = _timeRange.flatMapLatest { days ->
         val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
         val start = sdf.format(Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -days + 1) }.time)
-        unlockDao.getPeakHourSince(start).map { it?.let { h -> formatHourRange(h.hour) } ?: "No data" }
+        repo.unlockPeakHourSince(start).map { it?.let { h -> formatHourRange(h.hour) } ?: "No data" }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "No data")
 
     // ── App breakdown ─────────────────────────────────────────────────────────
@@ -168,7 +161,7 @@ class ScrollViewModel(
         val today = sdf.format(Date())
         val start = sdf.format(Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -days + 1) }.time)
 
-        appScrollDao.getTotalsBetween(start, today)
+        repo.appTotalsBetween(start, today)
             .combine(MyAccessibilityService.appScrollCounts) { dbTotals, liveCounts ->
                 Pair(dbTotals, liveCounts)
             }
@@ -196,7 +189,7 @@ class ScrollViewModel(
         val startDate = sdf.format(
             Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -7) }.time
         )
-        scrollDao.getHistorySince(startDate)
+        repo.scrollHistorySince(startDate)
             .map { dbDays ->
                 val today = sdf.format(Date())
                 // Phone-only baseline — do NOT add laptop history here.
@@ -256,7 +249,7 @@ class ScrollViewModel(
                 val startDate = sdf.format(
                     Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -days + 1) }.time
                 )
-                wellnessDao.getHistorySince(startDate).map { dbDays ->
+                repo.wellnessHistorySince(startDate).map { dbDays ->
                     val today = sdf.format(Date())
                     val pointMap = dbDays.associate { d ->
                         d.date to WellnessHistoryPoint(
@@ -295,7 +288,7 @@ class ScrollViewModel(
         val startDate = sdf.format(
             Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -6) }.time
         )
-        wellnessDao.getHistorySince(startDate)
+        repo.wellnessHistorySince(startDate)
             .combine(wellnessScore) { dbDays, liveScore ->
                 // Mirror the logic in wellnessHistory but for a fixed 7-day window.
                 val today = sdf.format(Date())
@@ -433,11 +426,9 @@ class ScrollViewModel(
         )
 
         try {
-            val db = ScrollDatabase.getDatabase(appContext)
-
-            val scrollDays   = db.scrollDao().getHistorySince(thirtyDaysBack).firstOrNull()
+            val scrollDays   = repo.scrollHistorySince(thirtyDaysBack).firstOrNull()
                                ?: return
-            val wellnessDates = db.wellnessDao().getHistorySince(thirtyDaysBack).firstOrNull()
+            val wellnessDates = repo.wellnessHistorySince(thirtyDaysBack).firstOrNull()
                                ?.map { it.date }?.toSet() ?: emptySet()
 
             // Only backfill past days (not today — live score handles today)
@@ -455,10 +446,9 @@ class ScrollViewModel(
                     }.time
                 )
 
-                val unlockDay = db.unlockDao().getDay(date)
+                val unlockDay = repo.unlockDay(date)
 
-                val appTotals = db.appScrollDao()
-                    .getTotalsBetween(date, nextDate)
+                val appTotals = repo.appTotalsBetween(date, nextDate)
                     .firstOrNull() ?: emptyList()
 
                 val topApps = appTotals
@@ -473,7 +463,7 @@ class ScrollViewModel(
                         add(Calendar.DAY_OF_YEAR, -7)
                     }.time
                 )
-                val prior = db.scrollDao().getHistorySince(sevenDaysBack).firstOrNull()
+                val prior = repo.scrollHistorySince(sevenDaysBack).firstOrNull()
                     ?.filter { it.date < date }?.map { it.count }?.filter { it >= 5 }
                     ?: emptyList()
                 val sevenDayAvg = if (prior.size < 3) 0f else prior.average().toFloat()
@@ -489,7 +479,7 @@ class ScrollViewModel(
                     topApps           = topApps
                 )
 
-                db.wellnessDao().insertOrUpdate(
+                repo.upsertWellnessDay(
                     WellnessDay(
                         date             = date,
                         score            = score.total,
@@ -520,15 +510,14 @@ class ScrollViewModel(
 
     suspend fun fetchHistoricalInsights(date: String): HistoricalInsights =
         kotlinx.coroutines.withContext(Dispatchers.IO) {
-            val db  = ScrollDatabase.getDatabase(appContext)
             val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
 
-            val unlockDay = db.unlockDao().getDay(date)
+            val unlockDay = repo.unlockDay(date)
 
-            val scrollPeak = db.scrollDao().getPeakHourForDate(date)
+            val scrollPeak = repo.scrollPeakHourForDate(date)
                 ?.let { formatHourRange(it.hour) } ?: "No data"
 
-            val unlockPeak = db.unlockDao().getPeakHourForDate(date)
+            val unlockPeak = repo.unlockPeakHourForDate(date)
                 ?.let { formatHourRange(it.hour) } ?: "No data"
 
             // App breakdown: date only (exclusive end = next day)
@@ -538,7 +527,7 @@ class ScrollViewModel(
                     add(Calendar.DAY_OF_YEAR, 1)
                 }.time
             )
-            val appTotals = db.appScrollDao().getTotalsBetween(date, nextDate).firstOrNull()
+            val appTotals = repo.appTotalsBetween(date, nextDate).firstOrNull()
                 ?: emptyList()
             val appBreakdown = appTotals
                 .filter { !isSystemPackage(it.packageName) }
@@ -565,7 +554,7 @@ class ScrollViewModel(
         AnalyticsHelper.logManualReset()
         val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
         viewModelScope.launch(Dispatchers.IO) {
-            scrollDao.deleteHoursForDate(today)
+            repo.deleteScrollHoursForDate(today)
         }
     }
 }

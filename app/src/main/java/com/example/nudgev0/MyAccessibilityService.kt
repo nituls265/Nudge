@@ -51,6 +51,18 @@ class MyAccessibilityService : AccessibilityService() {
     private var previousItemCount = -1
     private var lastScrollEventTime = 0L
 
+    // ── Hot-path caches (main-thread only) ────────────────────────────────────
+    // onAccessibilityEvent runs on the main thread for EVERY scroll event.
+    // Re-constructing SimpleDateFormat/Calendar and serialising the app map to
+    // JSON on each event caused main-thread work and battery drain at high
+    // scroll velocity. These reused instances + memoised day bounds keep the
+    // hot path allocation-free. NOT thread-safe — only touch from main thread.
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+    private val calendar   = Calendar.getInstance()
+    private var cachedDate     = ""
+    private var dayStartMs     = 0L
+    private var nextMidnightMs = 0L
+
     // Unlock tracking state
     private var lastUnlockSaveTime = 0L
     private val hourlyUnlockCounts = java.util.concurrent.ConcurrentHashMap<Int, Int>()
@@ -572,7 +584,7 @@ class MyAccessibilityService : AccessibilityService() {
         lastScrollEventTime = now
         if (timeSinceLastScroll < 400) return
 
-        val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        val today = currentDate(now)
         if (currentDayString.isNotEmpty() && currentDayString != today) {
             val finalDate  = currentDayString
             val finalCount = _scrollCount.value
@@ -615,7 +627,8 @@ class MyAccessibilityService : AccessibilityService() {
 
         try { checkIntervention(newCount) } catch (e: Exception) { e.printStackTrace() }
 
-        val currentHour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+        calendar.timeInMillis = now
+        val currentHour = calendar.get(Calendar.HOUR_OF_DAY)
         hourlyScrollCounts[currentHour] = (hourlyScrollCounts[currentHour] ?: 0) + 1
 
         val pkg = packageName.ifEmpty { "unknown" }
@@ -623,16 +636,35 @@ class MyAccessibilityService : AccessibilityService() {
             current.toMutableMap().also { it[pkg] = (it[pkg] ?: 0) + 1 }
         }
 
-        val appJson = JSONObject(_appScrollCounts.value as Map<*, *>).toString()
-        getSharedPreferences("NudgePrefs", Context.MODE_PRIVATE)
-            .edit()
-            .putInt("CURRENT_SCROLL_COUNT", newCount)
-            .putString("LAST_SCROLL_DATE", today)
-            .putString("APP_SCROLL_COUNTS", appJson)
-            .apply()
-
+        // Live recovery state (CURRENT_SCROLL_COUNT / LAST_SCROLL_DATE /
+        // APP_SCROLL_COUNTS) is no longer serialised + written here on every
+        // event. It is now persisted off the main thread inside the debounced
+        // saveScrollToDatabase() below, alongside the DB write that is the
+        // actual source of truth.
         if (_isBubbleVisible.value) updateBubbleText()
         saveScrollToDatabase(today, _scrollCount.value)
+    }
+
+    /**
+     * Today's yyyy-MM-dd, recomputed only when [now] falls outside the cached
+     * day window [dayStartMs, nextMidnightMs). Removes SimpleDateFormat/Calendar
+     * allocation from the per-scroll hot path while still reacting immediately
+     * to a midnight rollover, manual clock change, or timezone shift (any of
+     * which moves [now] outside the window). Main-thread only.
+     */
+    private fun currentDate(now: Long): String {
+        if (cachedDate.isEmpty() || now < dayStartMs || now >= nextMidnightMs) {
+            calendar.timeInMillis = now
+            calendar.set(Calendar.HOUR_OF_DAY, 0)
+            calendar.set(Calendar.MINUTE, 0)
+            calendar.set(Calendar.SECOND, 0)
+            calendar.set(Calendar.MILLISECOND, 0)
+            dayStartMs = calendar.timeInMillis
+            cachedDate = dateFormat.format(calendar.time)
+            calendar.add(Calendar.DAY_OF_YEAR, 1)
+            nextMidnightMs = calendar.timeInMillis
+        }
+        return cachedDate
     }
 
     private fun saveScrollToDatabase(date: String, count: Int) {
@@ -651,6 +683,17 @@ class MyAccessibilityService : AccessibilityService() {
                 appSnapshot.forEach { (pkg, appCount) ->
                     db.appScrollDao().insertOrUpdate(AppScrollDay(date, pkg, appCount))
                 }
+                // Crash-recovery snapshot to SharedPreferences — moved off the
+                // main thread and debounced with the DB save (2s). The DB rows
+                // above are the source of truth; onServiceConnected prefers them
+                // over prefs, so 2s granularity here is safe. JSON serialisation
+                // now happens on Dispatchers.IO instead of per-event on main.
+                val appJson = JSONObject(appSnapshot as Map<*, *>).toString()
+                getSharedPreferences("NudgePrefs", Context.MODE_PRIVATE).edit()
+                    .putInt("CURRENT_SCROLL_COUNT", count)
+                    .putString("LAST_SCROLL_DATE", date)
+                    .putString("APP_SCROLL_COUNTS", appJson)
+                    .apply()
             } catch (e: Exception) { e.printStackTrace() }
         }
     }

@@ -2,6 +2,7 @@ package com.example.nudgev0
 
 import android.Manifest
 import android.content.Context
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -95,9 +96,18 @@ class MainActivity : ComponentActivity() {
     private fun recordFirstLaunchDate() {
         val prefs = getSharedPreferences("NudgePrefs", Context.MODE_PRIVATE)
         if (!prefs.contains("FIRST_LAUNCH_DATE")) {
-            // Backdate by 8 days so beta users skip the calibration period on fresh install
-            val eightDaysAgo = System.currentTimeMillis() - 8 * 24 * 60 * 60 * 1000L
-            prefs.edit().putLong("FIRST_LAUNCH_DATE", eightDaysAgo).apply()
+            // The old code hard-coded an 8-day backdate for ALL builds, which
+            // silently disabled the 7-day calibration period for every real
+            // user. Now only DEBUG builds skip calibration (developer convenience
+            // — no week-long wait on each fresh install); release builds record
+            // the real first-launch date so genuine new users calibrate properly.
+            val isDebuggable = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+            val firstLaunch = if (isDebuggable) {
+                System.currentTimeMillis() - 8L * 24 * 60 * 60 * 1000   // skip calibration
+            } else {
+                System.currentTimeMillis()                              // real baseline
+            }
+            prefs.edit().putLong("FIRST_LAUNCH_DATE", firstLaunch).apply()
         }
     }
 

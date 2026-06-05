@@ -6,7 +6,11 @@ import androidx.lifecycle.viewModelScope
 import com.example.nudgev0.data.AppScrollDao
 import com.example.nudgev0.data.ScrollDao
 import com.example.nudgev0.data.ScrollDay
+import com.example.nudgev0.data.ScrollDatabase
 import com.example.nudgev0.data.UnlockDao
+import com.example.nudgev0.data.UnlockDay
+import com.example.nudgev0.data.WellnessDao
+import com.example.nudgev0.data.WellnessDay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
@@ -18,10 +22,17 @@ class ScrollViewModel(
     application: Application,
     private val scrollDao: ScrollDao,
     private val unlockDao: UnlockDao,
-    private val appScrollDao: AppScrollDao
+    private val appScrollDao: AppScrollDao,
+    private val wellnessDao: WellnessDao
 ) : AndroidViewModel(application) {
 
     private val appContext = application.applicationContext
+
+    init {
+        // Backfill wellness scores for any past day that has scroll data but no wellness entry.
+        // Handles the case where ResetWorker was delayed by Doze / battery optimisation.
+        viewModelScope.launch(Dispatchers.IO) { backfillMissingWellnessScores() }
+    }
 
     // ── Live state from the service ───────────────────────────────────────────
 
@@ -76,10 +87,8 @@ class ScrollViewModel(
             .combine(laptopHistory) { (raw, liveCount), laptopMap ->
                 val today = sdf.format(Date())
                 val map   = raw.associateBy { it.date }.toMutableMap()
-                // Today: phone live + laptop synced
                 map[today] = ScrollDay(today, liveCount + (laptopMap[today] ?: 0))
                 filledDays(days, sdf, map) { ScrollDay(it, 0) }
-                    // Add laptop counts for historical days
                     .map { day ->
                         if (day.date == today) day
                         else ScrollDay(day.date, day.count + (laptopMap[day.date] ?: 0))
@@ -100,6 +109,36 @@ class ScrollViewModel(
             val map = raw.associate { it.date to ScrollDay(it.date, it.count) }.toMutableMap()
             val today = sdf.format(Date())
             map[today] = ScrollDay(today, liveCount)
+            filledDays(days, sdf, map) { ScrollDay(it, 0) }
+                .let { if (days == 90) weeklyAverage(it) else it }
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // ── Screen time chart data ────────────────────────────────────────────────
+    // Each day's value = total screen time in minutes (avgSessionMin × unlockCount)
+
+    /** Live total screen time today in minutes */
+    val todayScreenTimeMin: StateFlow<Int> = combine(avgSessionMin, unlockCount) { avg, count ->
+        (avg * count).toInt()
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val screenTimeChartData: StateFlow<List<ScrollDay>> = _timeRange.flatMapLatest { days ->
+        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val cal = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -days + 1) }
+        val startDate = sdf.format(cal.time)
+
+        val liveScreenTime = combine(
+            MyAccessibilityService.avgSessionMin,
+            MyAccessibilityService.unlockCount
+        ) { avg, count -> (avg * count).toInt() }
+
+        unlockDao.getHistorySince(startDate).combine(liveScreenTime) { raw, liveMin ->
+            val today = sdf.format(Date())
+            val map = raw.associate { day ->
+                day.date to ScrollDay(day.date, (day.avgSessionMin * day.count).toInt())
+            }.toMutableMap()
+            map[today] = ScrollDay(today, liveMin)
             filledDays(days, sdf, map) { ScrollDay(it, 0) }
                 .let { if (days == 90) weeklyAverage(it) else it }
         }
@@ -138,7 +177,6 @@ class ScrollViewModel(
                 liveCounts.forEach { (pkg, count) ->
                     combined[pkg] = (combined[pkg] ?: 0) + count
                 }
-                // Sum laptop scrolls across the selected range
                 val laptopTotal = laptopMap.entries
                     .filter { it.key >= start && it.key <= today }
                     .sumOf { it.value }
@@ -151,25 +189,197 @@ class ScrollViewModel(
             }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    // ── 7-day scroll average for wellness baseline ────────────────────────────
+
+    private val sevenDayScrollAvg: StateFlow<Float> = run {
+        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val startDate = sdf.format(
+            Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -7) }.time
+        )
+        scrollDao.getHistorySince(startDate)
+            .map { dbDays ->
+                val today = sdf.format(Date())
+                // Phone-only baseline — do NOT add laptop history here.
+                // Laptop was set up recently so past days have no laptop data;
+                // mixing it with today's phone+laptop total makes the comparison unfair.
+                val days = dbDays
+                    .filter { it.date != today }
+                    .map { it.count }
+                    .filter { it >= 5 }   // ignore days with no meaningful usage
+                if (days.size < 3) 0f     // need at least 3 real days for a baseline
+                else days.average().toFloat()
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0f)
+    }
+
+    // ── Live wellness score ───────────────────────────────────────────────────
+
+    val wellnessScore: StateFlow<WellnessScore> = combine(
+        scrollCount,        // phone-only — matches phone-only baseline in sevenDayScrollAvg
+        sevenDayScrollAvg,
+        unlockCount,
+        avgSessionMin,
+        longestSessionMin
+    ) { a, b, c, d, e -> WnTuple5(a, b, c, d, e) }
+        .combine(firstUnlockMs) { t, first -> WnTuple6(t.a, t.b, t.c, t.d, t.e, first) }
+        .combine(lastUnlockMs)  { t, last  ->
+            val liveTopApps = MyAccessibilityService.appScrollCounts.value
+                .entries
+                .filter { !isSystemPackage(it.key) }
+                .sortedByDescending { it.value }
+                .map { it.key to it.value }
+
+            WellnessCalculator.calculate(
+                todayScrolls      = t.a,
+                sevenDayAvg       = t.b,
+                unlockCount       = t.c,
+                avgSessionMin     = t.d,
+                longestSessionMin = t.e,
+                firstUnlockMs     = t.f,
+                lastUnlockMs      = last,
+                topApps           = liveTopApps
+            )
+        }
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5000),
+            WellnessCalculator.calculate(0, 0f, 0, 0f, 0, 0L, 0L, emptyList())
+        )
+
+    // ── Wellness history (trend chart) ────────────────────────────────────────
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val wellnessHistory: StateFlow<List<WellnessHistoryPoint>> =
+        combine(_timeRange, wellnessScore) { days, liveScore -> Pair(days, liveScore) }
+            .flatMapLatest { (days, liveScore) ->
+                val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                val startDate = sdf.format(
+                    Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -days + 1) }.time
+                )
+                wellnessDao.getHistorySince(startDate).map { dbDays ->
+                    val today = sdf.format(Date())
+                    val pointMap = dbDays.associate { d ->
+                        d.date to WellnessHistoryPoint(
+                            date             = d.date,
+                            score            = d.score,
+                            scrollVolume     = d.scrollVolume,
+                            sessionBehaviour = d.sessionBehaviour,
+                            unlockFrequency  = d.unlockFrequency,
+                            timeHygiene      = d.timeHygiene,
+                            appQuality       = d.appQuality
+                        )
+                    }.toMutableMap()
+                    // Always inject the live score for today so it stays up-to-date
+                    pointMap[today] = WellnessHistoryPoint(
+                        date             = today,
+                        score            = liveScore.total,
+                        scrollVolume     = liveScore.scrollVolume,
+                        sessionBehaviour = liveScore.sessionBehaviour,
+                        unlockFrequency  = liveScore.unlockFrequency,
+                        timeHygiene      = liveScore.timeHygiene,
+                        appQuality       = liveScore.appQuality
+                    )
+
+                    filledDays(days, sdf, pointMap) { WellnessHistoryPoint(it, -1) }
+                        .let { if (days == 90) weeklyWellnessAverage(it) else it }
+                }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // ── 7-day fixed wellness window (HomeTab delta/trend — independent of UI range) ──
+    // Always covers the last 7 calendar days so delta and trend labels are stable
+    // regardless of which time-range the user has selected on the History tab.
+    // Uses WhileSubscribed so it stops collecting when HomeTab is off-screen.
+    private val recentWellnessHistory: StateFlow<List<WellnessHistoryPoint>> = run {
+        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val startDate = sdf.format(
+            Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -6) }.time
+        )
+        wellnessDao.getHistorySince(startDate)
+            .combine(wellnessScore) { dbDays, liveScore ->
+                // Mirror the logic in wellnessHistory but for a fixed 7-day window.
+                val today = sdf.format(Date())
+                val map = dbDays.associate { d ->
+                    d.date to WellnessHistoryPoint(
+                        date             = d.date,
+                        score            = d.score,
+                        scrollVolume     = d.scrollVolume,
+                        sessionBehaviour = d.sessionBehaviour,
+                        unlockFrequency  = d.unlockFrequency,
+                        timeHygiene      = d.timeHygiene,
+                        appQuality       = d.appQuality
+                    )
+                }.toMutableMap()
+                // Always inject live today score so the delta reflects the current moment
+                map[today] = WellnessHistoryPoint(
+                    date             = today,
+                    score            = liveScore.total,
+                    scrollVolume     = liveScore.scrollVolume,
+                    sessionBehaviour = liveScore.sessionBehaviour,
+                    unlockFrequency  = liveScore.unlockFrequency,
+                    timeHygiene      = liveScore.timeHygiene,
+                    appQuality       = liveScore.appQuality
+                )
+                filledDays(7, sdf, map) { WellnessHistoryPoint(it, -1) }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }
+
+    /**
+     * How many points today's score is up or down vs yesterday.
+     * Null until at least one full previous day exists in the DB.
+     */
+    val scoreDelta: StateFlow<Int?> = recentWellnessHistory.map { history ->
+        val sdf      = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val todayStr = sdf.format(Date())
+        val yestStr  = sdf.format(
+            Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -1) }.time
+        )
+        val todayPts = history.find { it.date == todayStr }?.score?.takeIf { it >= 0 }
+        val yestPts  = history.find { it.date == yestStr  }?.score?.takeIf { it >= 0 }
+        if (todayPts != null && yestPts != null) todayPts - yestPts else null
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    /**
+     * "Best in X days" or "2nd best this week" — empty string when not noteworthy
+     * or when there are fewer than 2 past days of data to compare against.
+     */
+    val scoreTrendLabel: StateFlow<String> = recentWellnessHistory.map { history ->
+        val sdf      = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val todayStr = sdf.format(Date())
+        val todayPts = history.find { it.date == todayStr }?.score?.takeIf { it >= 0 }
+            ?: return@map ""
+        val pastScores = history
+            .filter { it.date != todayStr && it.score >= 0 }
+            .map { it.score }
+        if (pastScores.size < 2) return@map ""   // need ≥ 2 past days to be meaningful
+        val beaten = pastScores.count { todayPts > it }
+        when {
+            beaten == pastScores.size     -> "📈 Best in ${pastScores.size + 1} days"
+            beaten >= pastScores.size - 1 -> "📊 2nd best this week"
+            else                          -> ""
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private fun isSystemPackage(pkg: String): Boolean {
         if (pkg.isEmpty() || pkg == "unknown") return true
         val systemPrefixes = listOf(
-            "android",               // base Android OS ("Android")
-            "com.android.",          // System UI, launcher, settings, etc.
-            "com.google.android.",   // GMS, Play Services, etc.
-            "com.samsung.android.",  // Samsung system apps
+            "android",
+            "com.android.",
+            "com.google.android.",
+            "com.samsung.android.",
         )
         return systemPrefixes.any { pkg == it || pkg.startsWith(it) }
     }
 
-    private fun filledDays(
+    private fun <V> filledDays(
         days: Int,
         sdf: SimpleDateFormat,
-        map: Map<String, ScrollDay>,
-        default: (String) -> ScrollDay
-    ): List<ScrollDay> = (0 until days).map { i ->
+        map: Map<String, V>,
+        default: (String) -> V
+    ): List<V> = (0 until days).map { i ->
         val c = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -(days - 1) + i) }
         val dateStr = sdf.format(c.time)
         map[dateStr] ?: default(dateStr)
@@ -180,12 +390,163 @@ class ScrollViewModel(
             ScrollDay(week.first().date, week.map { it.count }.average().toInt())
         }
 
+    private fun weeklyWellnessAverage(list: List<WellnessHistoryPoint>): List<WellnessHistoryPoint> =
+        list.chunked(7).map { week ->
+            val scored = week.filter { it.score >= 0 }
+            if (scored.isEmpty()) {
+                WellnessHistoryPoint(week.first().date, -1)
+            } else {
+                fun avg(sel: (WellnessHistoryPoint) -> Int) =
+                    scored.map { sel(it) }.filter { it >= 0 }.let {
+                        if (it.isEmpty()) -1 else it.average().toInt()
+                    }
+                WellnessHistoryPoint(
+                    date             = week.first().date,
+                    score            = scored.map { it.score }.average().toInt(),
+                    scrollVolume     = avg { it.scrollVolume },
+                    sessionBehaviour = avg { it.sessionBehaviour },
+                    unlockFrequency  = avg { it.unlockFrequency },
+                    timeHygiene      = avg { it.timeHygiene },
+                    appQuality       = avg { it.appQuality }
+                )
+            }
+        }
+
     private fun formatHourRange(hour: Int): String {
-        val fmt = SimpleDateFormat("h a", Locale.getDefault())
+        val fmt   = SimpleDateFormat("h a", Locale.getDefault())
         val start = Calendar.getInstance().apply { set(Calendar.HOUR_OF_DAY, hour); set(Calendar.MINUTE, 0) }
         val end   = Calendar.getInstance().apply { set(Calendar.HOUR_OF_DAY, (hour + 1) % 24); set(Calendar.MINUTE, 0) }
         return "${fmt.format(start.time)} – ${fmt.format(end.time)}"
     }
+
+    // ── Wellness backfill ─────────────────────────────────────────────────────
+    // Runs once on startup. If ResetWorker was delayed (Doze, battery optimisation,
+    // app not open at midnight), any past day with scroll data but no wellness row
+    // gets its score computed retroactively from the DB.
+
+    private suspend fun backfillMissingWellnessScores() {
+        val sdf   = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val today = sdf.format(Date())
+
+        val thirtyDaysBack = sdf.format(
+            Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -30) }.time
+        )
+
+        try {
+            val db = ScrollDatabase.getDatabase(appContext)
+
+            val scrollDays   = db.scrollDao().getHistorySince(thirtyDaysBack).firstOrNull()
+                               ?: return
+            val wellnessDates = db.wellnessDao().getHistorySince(thirtyDaysBack).firstOrNull()
+                               ?.map { it.date }?.toSet() ?: emptySet()
+
+            // Only backfill past days (not today — live score handles today)
+            val missing = scrollDays.filter { it.date != today && it.date !in wellnessDates }
+            if (missing.isEmpty()) return
+
+            for (scrollDay in missing) {
+                val date = scrollDay.date
+
+                // Date after this day (needed for the exclusive-end app-scroll query)
+                val nextDate = sdf.format(
+                    Calendar.getInstance().apply {
+                        time = sdf.parse(date)!!
+                        add(Calendar.DAY_OF_YEAR, 1)
+                    }.time
+                )
+
+                val unlockDay = db.unlockDao().getDay(date)
+
+                val appTotals = db.appScrollDao()
+                    .getTotalsBetween(date, nextDate)
+                    .firstOrNull() ?: emptyList()
+
+                val topApps = appTotals
+                    .filter { !isSystemPackage(it.packageName) }
+                    .sortedByDescending { it.total }
+                    .map { it.packageName to it.total }
+
+                // 7-day average: scroll days strictly before this date
+                val sevenDaysBack = sdf.format(
+                    Calendar.getInstance().apply {
+                        time = sdf.parse(date)!!
+                        add(Calendar.DAY_OF_YEAR, -7)
+                    }.time
+                )
+                val prior = db.scrollDao().getHistorySince(sevenDaysBack).firstOrNull()
+                    ?.filter { it.date < date }?.map { it.count }?.filter { it >= 5 }
+                    ?: emptyList()
+                val sevenDayAvg = if (prior.size < 3) 0f else prior.average().toFloat()
+
+                val score = WellnessCalculator.calculate(
+                    todayScrolls      = scrollDay.count,
+                    sevenDayAvg       = sevenDayAvg,
+                    unlockCount       = unlockDay?.count ?: 0,
+                    avgSessionMin     = unlockDay?.avgSessionMin ?: 0f,
+                    longestSessionMin = unlockDay?.longestSessionMin ?: 0,
+                    firstUnlockMs     = unlockDay?.firstUnlockMs ?: 0L,
+                    lastUnlockMs      = unlockDay?.lastUnlockMs ?: 0L,
+                    topApps           = topApps
+                )
+
+                db.wellnessDao().insertOrUpdate(
+                    WellnessDay(
+                        date             = date,
+                        score            = score.total,
+                        tier             = score.tier.name,
+                        scrollVolume     = score.scrollVolume,
+                        sessionBehaviour = score.sessionBehaviour,
+                        unlockFrequency  = score.unlockFrequency,
+                        timeHygiene      = score.timeHygiene,
+                        appQuality       = score.appQuality
+                    )
+                )
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    // ── Historical bar-tap insights ───────────────────────────────────────────
+
+    /** Fetched once per bar tap — all data for a specific past date. */
+    data class HistoricalInsights(
+        val date: String,
+        val unlockDay: UnlockDay?,
+        val scrollPeakHour: String,
+        val unlockPeakHour: String,
+        val appBreakdown: List<Pair<String, Int>>
+    )
+
+    suspend fun fetchHistoricalInsights(date: String): HistoricalInsights =
+        kotlinx.coroutines.withContext(Dispatchers.IO) {
+            val db  = ScrollDatabase.getDatabase(appContext)
+            val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+
+            val unlockDay = db.unlockDao().getDay(date)
+
+            val scrollPeak = db.scrollDao().getPeakHourForDate(date)
+                ?.let { formatHourRange(it.hour) } ?: "No data"
+
+            val unlockPeak = db.unlockDao().getPeakHourForDate(date)
+                ?.let { formatHourRange(it.hour) } ?: "No data"
+
+            // App breakdown: date only (exclusive end = next day)
+            val nextDate = sdf.format(
+                Calendar.getInstance().apply {
+                    time = sdf.parse(date)!!
+                    add(Calendar.DAY_OF_YEAR, 1)
+                }.time
+            )
+            val appTotals = db.appScrollDao().getTotalsBetween(date, nextDate).firstOrNull()
+                ?: emptyList()
+            val appBreakdown = appTotals
+                .filter { !isSystemPackage(it.packageName) }
+                .sortedByDescending { it.total }
+                .map { it.packageName to it.total }
+
+            HistoricalInsights(date, unlockDay, scrollPeak, unlockPeak, appBreakdown)
+        }
 
     // ── Actions ───────────────────────────────────────────────────────────────
 
@@ -208,3 +569,20 @@ class ScrollViewModel(
         }
     }
 }
+
+// ── Tiny tuple helpers (avoid boxing arrays) ──────────────────────────────────
+
+private data class WnTuple5<A, B, C, D, E>(val a: A, val b: B, val c: C, val d: D, val e: E)
+private data class WnTuple6<A, B, C, D, E, F>(val a: A, val b: B, val c: C, val d: D, val e: E, val f: F)
+
+// ── Wellness history point ────────────────────────────────────────────────────
+
+data class WellnessHistoryPoint(
+    val date: String,
+    val score: Int,              // -1 = no data
+    val scrollVolume: Int     = -1,
+    val sessionBehaviour: Int = -1,
+    val unlockFrequency: Int  = -1,
+    val timeHygiene: Int      = -1,
+    val appQuality: Int       = -1
+)

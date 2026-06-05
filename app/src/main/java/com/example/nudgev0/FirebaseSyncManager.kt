@@ -26,36 +26,45 @@ object FirebaseSyncManager {
     val syncCodeFlow: StateFlow<String> = _syncCodeFlow
 
     // ── Init: sign in anonymously once, store the UID as the Sync Code ────────
+    //
+    // The Sync Code is the FULL Firebase UID — it doubles as the Realtime
+    // Database path key (users/{uid}/…) shared between phone and the Chrome
+    // extension. We deliberately do NOT truncate or upper-case it:
+    //   • take(12)     dropped Firebase's per-account uniqueness guarantee.
+    //   • .uppercase() collapsed mixed-case UIDs (e.g. "aB…" and "Ab…") onto
+    //                  the same key, aliasing otherwise-distinct accounts.
+    // Both together made the keyspace 36^12 (birthday collisions ~2.2B users).
+    // Firebase UIDs are already URL/key-safe and globally unique, so using the
+    // full UID gives zero-collision sync. (The code is copy-pasted, so the
+    // extra length is invisible to users.)
     suspend fun init(context: Context) {
         try {
             // If we already stored a UID from a previous launch, emit it immediately
             val prefs = context.getSharedPreferences("NudgePrefs", Context.MODE_PRIVATE)
             val stored = prefs.getString("FIREBASE_SYNC_ID", null)
-            if (stored != null) _syncCodeFlow.value = stored.take(12).uppercase()
+            if (stored != null) _syncCodeFlow.value = stored
 
             if (auth.currentUser == null) {
                 auth.signInAnonymously().await()
             }
             val uid = auth.currentUser?.uid ?: return
             prefs.edit().putString("FIREBASE_SYNC_ID", uid).apply()
-            _syncCodeFlow.value = uid.take(12).uppercase()
+            _syncCodeFlow.value = uid
         } catch (e: Exception) {
             e.printStackTrace()
         }
     }
 
-    // ── Sync Code: first 12 chars of UID, displayed in the app ───────────────
+    // ── Sync Code: the full UID, displayed in the app and pasted into the extension
     fun getSyncCode(context: Context): String {
-        val uid = context.getSharedPreferences("NudgePrefs", Context.MODE_PRIVATE)
-            .getString("FIREBASE_SYNC_ID", null) ?: return "—"
-        return uid.take(12).uppercase()
+        return context.getSharedPreferences("NudgePrefs", Context.MODE_PRIVATE)
+            .getString("FIREBASE_SYNC_ID", null) ?: "—"
     }
 
-    // Use the same 12-char code shown in the UI — this is what the extension pastes in
+    // Same value the UI shows — this is exactly what the extension pastes in
     private fun getSyncId(context: Context): String? {
-        val uid = context.getSharedPreferences("NudgePrefs", Context.MODE_PRIVATE)
-            .getString("FIREBASE_SYNC_ID", null) ?: return null
-        return uid.take(12).uppercase()
+        return context.getSharedPreferences("NudgePrefs", Context.MODE_PRIVATE)
+            .getString("FIREBASE_SYNC_ID", null)
     }
 
     // ── Listen to ALL laptop counts (keyed by date) — for chart history ─────────

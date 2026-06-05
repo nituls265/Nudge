@@ -17,12 +17,15 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -65,25 +68,50 @@ enum class AppTab { HOME, HISTORY }
 @Composable
 fun MainScreen(factory: ScrollViewModelFactory) {
     val vm: ScrollViewModel = viewModel(factory = factory)
-    var selectedTab  by remember { mutableStateOf(AppTab.HOME) }
     var showSettings by remember { mutableStateOf(false) }
+
+    // Pager drives both swipe navigation and the bottom nav indicator.
+    // pageCount = 2: page 0 = Home, page 1 = History.
+    val pagerState = rememberPagerState(pageCount = { 2 })
+    val scope      = rememberCoroutineScope()
+
+    // Derive the selected tab from the pager so the indicator always tracks
+    // mid-swipe, not just on settle.
+    val selectedTab = if (pagerState.currentPage == 0) AppTab.HOME else AppTab.HISTORY
 
     Scaffold(
         modifier       = Modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar      = {
-            BottomNavBar(selectedTab = selectedTab, onSelect = { selectedTab = it })
+            BottomNavBar(
+                selectedTab  = selectedTab,
+                settleOffset = pagerState.currentPageOffsetFraction,
+                onSelect     = { tab ->
+                    scope.launch {
+                        pagerState.animateScrollToPage(
+                            if (tab == AppTab.HOME) 0 else 1
+                        )
+                    }
+                }
+            )
         }
     ) { innerPadding ->
-        Box(modifier = Modifier.padding(innerPadding)) {
-            when (selectedTab) {
-                AppTab.HOME    -> HomeTab(vm = vm,    onSettingsClick = { showSettings = true })
-                AppTab.HISTORY -> HistoryTab(vm = vm, onSettingsClick = { showSettings = true })
+        HorizontalPager(
+            state    = pagerState,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding),
+            // Disable over-scroll glow — it conflicts with charts that have
+            // their own horizontal scroll inside the History tab.
+            beyondViewportPageCount = 0
+        ) { page ->
+            when (page) {
+                0    -> HomeTab(vm = vm,    onSettingsClick = { showSettings = true })
+                else -> HistoryTab(vm = vm, onSettingsClick = { showSettings = true })
             }
         }
     }
 
-    // Settings lives in a bottom sheet so it never needs its own nav entry
     if (showSettings) {
         SettingsSheet(vm = vm, onDismiss = { showSettings = false })
     }
@@ -92,7 +120,11 @@ fun MainScreen(factory: ScrollViewModelFactory) {
 // ── Bottom nav bar ────────────────────────────────────────────────────────────
 
 @Composable
-internal fun BottomNavBar(selectedTab: AppTab, onSelect: (AppTab) -> Unit) {
+internal fun BottomNavBar(
+    selectedTab: AppTab,
+    settleOffset: Float,        // pagerState.currentPageOffsetFraction for live tracking
+    onSelect: (AppTab) -> Unit
+) {
     Surface(
         color           = Slate900,
         shadowElevation = 8.dp,
@@ -102,7 +134,7 @@ internal fun BottomNavBar(selectedTab: AppTab, onSelect: (AppTab) -> Unit) {
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .height(60.dp)
+                .height(62.dp)
         ) {
             NavTabItem(
                 icon     = "🏠",
@@ -128,28 +160,41 @@ private fun NavTabItem(
     modifier: Modifier, onClick: () -> Unit
 ) {
     val color = if (selected) Green else Slate500
-    Box(modifier = modifier.fillMaxHeight()) {
-        // Top indicator line when selected
+
+    // The outer Box carries weight(1f) — correct inside a Row.
+    // The clickable wraps the ENTIRE cell so any tap anywhere in the tab works.
+    // The inner Column uses Modifier.fillMaxSize() (not the outer modifier) so
+    // weight isn't re-applied inside a Box (it has no effect there and caused
+    // the content to collapse to the top-left corner).
+    Box(
+        modifier = modifier
+            .fillMaxHeight()
+            .clickable(
+                indication        = null,
+                interactionSource = remember { MutableInteractionSource() }
+            ) { onClick() },
+        contentAlignment = Alignment.Center          // centres icon+label in the cell
+    ) {
+        // Selected indicator — 2 dp line pinned to the top of the cell
         if (selected) {
             Box(
                 modifier = Modifier
+                    .align(Alignment.TopCenter)
                     .fillMaxWidth()
                     .height(2.dp)
                     .background(Green)
-                    .align(Alignment.TopCenter)
             )
         }
+
+        // Icon + label — centred by the Box's contentAlignment
         Column(
-            modifier = modifier
-                .fillMaxHeight()
-                .clickable(
-                    indication        = null,
-                    interactionSource = remember { MutableInteractionSource() }
-                ) { onClick() },
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Text(icon, fontSize = if (selected) 20.sp else 18.sp)
+            Text(
+                icon,
+                fontSize = if (selected) 20.sp else 18.sp
+            )
             Spacer(Modifier.height(2.dp))
             Text(
                 label,

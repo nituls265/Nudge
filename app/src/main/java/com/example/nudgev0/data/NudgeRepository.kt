@@ -94,6 +94,8 @@ class NudgeRepository private constructor(private val db: ScrollDatabase) {
 
     suspend fun deleteScrollHoursForDate(date: String) = scrollDao.deleteHoursForDate(date)
 
+    suspend fun deleteAppScrollsForDate(date: String) = appScrollDao.deleteForDate(date)
+
     companion object {
         @Volatile private var INSTANCE: NudgeRepository? = null
 

@@ -506,12 +506,29 @@ class ScrollViewModel(
     }
 
     fun resetScrollCount() {
-        MyAccessibilityService.resetScrollCount()
+        MyAccessibilityService.resetScrollCount()   // clears live in-memory state
         AnalyticsHelper.logManualReset()
         val today = DayBoundary.today()
+
+        // Fully wipe today's PERSISTED scroll data so it re-accumulates
+        // consistently (total, per-app rows, and hourly buckets). Setting the day
+        // total to 0 — rather than leaving the old row — also stops the
+        // onServiceConnected DB-fallback from ratcheting the live count back up
+        // on the next service restart.
         viewModelScope.launch(Dispatchers.IO) {
+            repo.upsertScrollDay(com.example.nudgev0.data.ScrollDay(today, 0))
+            repo.deleteAppScrollsForDate(today)
             repo.deleteScrollHoursForDate(today)
         }
+
+        // Reset the SharedPreferences recovery snapshot too, so a service restart
+        // can't restore the stale count / per-app map.
+        appContext.getSharedPreferences("NudgePrefs", android.content.Context.MODE_PRIVATE)
+            .edit()
+            .putInt("CURRENT_SCROLL_COUNT", 0)
+            .putString("APP_SCROLL_COUNTS", "{}")
+            .putString("LAST_SCROLL_DATE", today)
+            .apply()
     }
 }
 

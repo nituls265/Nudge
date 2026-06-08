@@ -148,31 +148,23 @@ class ScrollViewModel(
 
     // ── App breakdown ─────────────────────────────────────────────────────────
 
-    @OptIn(ExperimentalCoroutinesApi::class)
-    val appBreakdown: StateFlow<List<Pair<String, Int>>> = _timeRange.flatMapLatest { days ->
-        val today = DayBoundary.today()
-        val start = DayBoundary.daysAgo(days - 1)
-
-        repo.appTotalsBetween(start, today)
-            .combine(MyAccessibilityService.appScrollCounts) { dbTotals, liveCounts ->
-                Pair(dbTotals, liveCounts)
-            }
-            .combine(laptopHistory) { (dbTotals, liveCounts), laptopMap ->
-                val combined = dbTotals.associate { it.packageName to it.total }.toMutableMap()
-                liveCounts.forEach { (pkg, count) ->
-                    combined[pkg] = (combined[pkg] ?: 0) + count
-                }
-                val laptopTotal = laptopMap.entries
-                    .filter { it.key >= start && it.key <= today }
-                    .sumOf { it.value }
-                if (laptopTotal > 0) combined["laptop"] = laptopTotal
-
-                combined.entries
-                    .filter { !isSystemPackage(it.key) }
-                    .sortedByDescending { it.value }
-                    .map { it.toPair() }
-            }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    // Today's scroll sources: live per-app phone counts + TODAY's laptop count.
+    // Deliberately scoped to today (not the selected time range) so it matches
+    // the home-screen Scrolls pill and the "today" bar in the chart. Tapping a
+    // PAST bar swaps in that day's breakdown via fetchHistoricalInsights().
+    //
+    // (Previously this summed app + laptop scrolls across the whole range, so
+    // "today" under History showed e.g. 967 laptop scrolls — a 7-day total —
+    // while Home showed today's 306. Same number, two scopes = confusing.)
+    val appBreakdown: StateFlow<List<Pair<String, Int>>> =
+        combine(MyAccessibilityService.appScrollCounts, laptopCount) { liveCounts, laptopToday ->
+            val combined = liveCounts.toMutableMap()
+            if (laptopToday > 0) combined["laptop"] = laptopToday
+            combined.entries
+                .filter { !isSystemPackage(it.key) }
+                .sortedByDescending { it.value }
+                .map { it.toPair() }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // ── 7-day scroll average for wellness baseline ────────────────────────────
 

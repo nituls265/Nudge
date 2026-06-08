@@ -713,14 +713,12 @@ internal fun BarColumn(
 internal fun AppBreakdownSection(entries: List<Pair<String, Int>>) {
     val context   = LocalContext.current
     var expanded  by remember { mutableStateOf(false) }
-    // Percentages are still computed against the TRUE total (incl. untracked
-    // scrolls) so each source keeps its real share — e.g. laptop stays ~17%,
-    // not 87%. The untracked "other" bucket itself is not drawn as a row.
+    // Percentages are taken against the sum of the shown sources, so they add
+    // up to 100%.
     val total     = entries.sumOf { it.second }.coerceAtLeast(1)
-    val visible   = entries.filter { it.first != "other" }
-    val maxCount  = visible.firstOrNull()?.second?.coerceAtLeast(1) ?: 1
-    val shown     = if (expanded) visible else visible.take(3)
-    val hidden    = visible.size - 3
+    val maxCount  = entries.firstOrNull()?.second?.coerceAtLeast(1) ?: 1
+    val shown     = if (expanded) entries else entries.take(3)
+    val hidden    = entries.size - 3
 
     Row(
         modifier              = Modifier.fillMaxWidth(),
@@ -729,7 +727,7 @@ internal fun AppBreakdownSection(entries: List<Pair<String, Int>>) {
     ) {
         Text("SCROLL SOURCES", style = MaterialTheme.typography.labelSmall,
             color = Slate400, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
-        if (visible.size > 3) {
+        if (entries.size > 3) {
             Text(
                 if (expanded) "Show less ▲" else "+$hidden more ▼",
                 style      = MaterialTheme.typography.labelSmall,

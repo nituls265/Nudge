@@ -148,43 +148,29 @@ class ScrollViewModel(
 
     // ── App breakdown ─────────────────────────────────────────────────────────
 
-    // Today's scroll sources. Scoped to TODAY (not the selected range) so it
-    // matches the home-screen Scrolls pill and the "today" bar; tapping a PAST
-    // bar swaps in that day's breakdown via fetchHistoricalInsights().
+    // Today's scroll sources: phone per-app counts (from the DB — the most
+    // complete attribution, accumulated across restarts) + today's laptop count.
+    // Scoped to TODAY (not the selected range) so it matches the home-screen
+    // Scrolls pill and the "today" bar; tapping a PAST bar swaps in that day's
+    // breakdown via fetchHistoricalInsights().
     //
-    // Percentages are computed against the TRUE scroll total (phone scrollCount +
-    // laptop), NOT the sum of tracked apps. Phone per-app counts come from the DB
-    // (the most complete attribution — it accumulates across restarts), and any
-    // phone scrolls we can't attribute to a tracked app are surfaced as an
-    // explicit "Other" bucket: system UI / launcher / unknown surfaces, plus
-    // attribution lost across a service restart.
-    //
-    // Without this, the breakdown summed only the tracked apps, so today's
-    // laptop 306 showed as 87% of a ~351 "total" instead of its true ~19% of
-    // ~1600 — even though only 370 of 1294 phone scrolls were app-attributable.
+    // The UI computes each percentage against the SUM of these shown sources, so
+    // they add up to 100%. On a normal day the per-app attribution is complete
+    // (every counted scroll increments exactly one app), so this equals each
+    // source's true share. (On a day whose attribution was corrupted by repeated
+    // service restarts, a heavily-used source can look inflated, because the
+    // unlabelled scrolls are no longer part of the denominator.)
     val appBreakdown: StateFlow<List<Pair<String, Int>>> =
         combine(
             repo.appTotalsBetween(today, DayBoundary.shift(today, 1)),
-            scrollCount,
             laptopCount
-        ) { dbToday, phoneTotal, laptopToday ->
+        ) { dbToday, laptopToday ->
             val apps = dbToday
                 .filter { !isSystemPackage(it.packageName) }
                 .associate { it.packageName to it.total }
                 .toMutableMap()
-            val attributed = apps.values.sum()
             if (laptopToday > 0) apps["laptop"] = laptopToday
-
-            val result = apps.entries
-                .sortedByDescending { it.value }
-                .map { it.toPair() }
-                .toMutableList()
-
-            // Unattributed phone scrolls → keep the percentages honest. Sorted
-            // last (after the real sources) regardless of size.
-            val other = phoneTotal - attributed
-            if (other > 0) result.add("other" to other)
-            result
+            apps.entries.sortedByDescending { it.value }.map { it.toPair() }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // ── 7-day scroll average for wellness baseline ────────────────────────────

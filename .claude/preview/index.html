@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nudge – Calibration Mode Preview</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #1a1a2e;
+      display: flex;
+      gap: 48px;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 40px 24px;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+    }
+
+    .label {
+      text-align: center;
+      color: #aaa;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+
+    /* Phone shell */
+    .phone {
+      width: 360px;
+      background: #141218;
+      border-radius: 36px;
+      border: 2px solid #2a2a3a;
+      overflow: hidden;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+    }
+
+    .status-bar {
+      height: 32px;
+      background: #141218;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding: 0 20px;
+      gap: 6px;
+    }
+    .status-bar span { color: #ccc; font-size: 11px; }
+
+    .screen {
+      background: #141218;
+      padding: 16px 20px 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    /* Cards */
+    .card {
+      background: #2a2535;
+      border-radius: 20px;
+      padding: 24px;
+      text-align: center;
+    }
+
+    .card-label {
+      color: #9e9aaa;
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 6px;
+    }
+
+    .card-value {
+      color: #ece6f0;
+      font-size: 64px;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    /* Time range selector */
+    .time-selector {
+      background: #2a2535;
+      border-radius: 12px;
+      padding: 4px;
+      display: flex;
+      gap: 2px;
+    }
+
+    .chip {
+      flex: 1;
+      padding: 8px 0;
+      border-radius: 8px;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 600;
+      color: #9e9aaa;
+      cursor: pointer;
+    }
+
+    .chip.active {
+      background: #6750a4;
+      color: #fff;
+    }
+
+    /* Chart area */
+    .chart-area {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .avg-label {
+      color: #9e9aaa;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .bars {
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+      height: 120px;
+    }
+
+    .bar-col {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      flex: 1;
+    }
+
+    .bar-count {
+      color: #ece6f0;
+      font-size: 10px;
+      font-weight: 600;
+    }
+
+    .bar {
+      width: 100%;
+      border-radius: 4px 4px 0 0;
+      background: #6750a4;
+    }
+
+    .bar-date {
+      color: #9e9aaa;
+      font-size: 10px;
+    }
+
+    /* Peak hour card */
+    .peak-card {
+      background: rgba(42,37,53,0.5);
+      border-radius: 14px;
+      padding: 16px 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .peak-label { color: #9e9aaa; font-size: 14px; font-weight: 500; }
+    .peak-value { color: #6750a4; font-size: 14px; font-weight: 700; }
+
+    /* Calibration banner */
+    .calibration-card {
+      background: linear-gradient(135deg, #1e1a2e, #2a1f3d);
+      border: 1px solid #6750a4;
+      border-radius: 16px;
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .cal-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .cal-icon {
+      width: 28px;
+      height: 28px;
+      background: #6750a4;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+
+    .cal-title {
+      color: #d0bcff;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .cal-subtitle {
+      color: #9e9aaa;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .cal-progress-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .cal-days {
+      color: #d0bcff;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .progress-bar-bg {
+      flex: 1;
+      height: 4px;
+      background: #3a2f52;
+      border-radius: 2px;
+      margin: 0 10px;
+      overflow: hidden;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: #6750a4;
+      border-radius: 2px;
+    }
+
+    /* Buttons */
+    .buttons {
+      display: flex;
+      gap: 12px;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 16px;
+      border-radius: 16px;
+      font-size: 14px;
+      font-weight: 600;
+      text-align: center;
+      cursor: pointer;
+      border: none;
+    }
+
+    .btn-primary {
+      background: #6750a4;
+      color: #fff;
+    }
+
+    .btn-secondary {
+      background: #2a2535;
+      color: #ece6f0;
+    }
+
+    .btn-disabled {
+      background: #2a2535;
+      color: #4a4560;
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+
+    .btn-primary.disabled {
+      background: #3a3050;
+      color: #4a4560;
+      cursor: not-allowed;
+    }
+
+    .reset-btn {
+      text-align: center;
+      color: #b3261e;
+      font-size: 14px;
+      font-weight: 700;
+      padding: 8px;
+    }
+
+    .divider { border: none; border-top: 1px solid #2a2535; }
+
+    /* Lock icon overlay on buttons */
+    .btn-wrapper {
+      flex: 1;
+      position: relative;
+    }
+    .btn-wrapper .btn { width: 100%; }
+    .lock-badge {
+      position: absolute;
+      top: -6px;
+      right: -6px;
+      background: #49454f;
+      border-radius: 50%;
+      width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- STATE 1: Normal mode -->
+  <div>
+    <div class="label">Normal Mode</div>
+    <div class="phone">
+      <div class="status-bar"><span>9:41</span></div>
+      <div class="screen">
+
+        <div class="card">
+          <div class="card-label">Today's Scrolls</div>
+          <div class="card-value">42</div>
+        </div>
+
+        <div class="time-selector">
+          <div class="chip active">7 Days</div>
+          <div class="chip">30 Days</div>
+          <div class="chip">3 Months</div>
+        </div>
+
+        <div class="chart-area">
+          <div class="avg-label">Average: 38 / day</div>
+          <div class="bars">
+            <div class="bar-col"><div class="bar-count">28</div><div class="bar" style="height:52px"></div><div class="bar-date">01</div></div>
+            <div class="bar-col"><div class="bar-count">45</div><div class="bar" style="height:84px"></div><div class="bar-date">02</div></div>
+            <div class="bar-col"><div class="bar-count">31</div><div class="bar" style="height:58px"></div><div class="bar-date">03</div></div>
+            <div class="bar-col"><div class="bar-count">52</div><div class="bar" style="height:100px; background:#b3261e"></div><div class="bar-date">04</div></div>
+            <div class="bar-col"><div class="bar-count">38</div><div class="bar" style="height:72px"></div><div class="bar-date">05</div></div>
+            <div class="bar-col"><div class="bar-count">22</div><div class="bar" style="height:42px"></div><div class="bar-date">06</div></div>
+            <div class="bar-col"><div class="bar-count">42</div><div class="bar" style="height:78px"></div><div class="bar-date">07</div></div>
+          </div>
+        </div>
+
+        <div class="peak-card">
+          <span class="peak-label">Peak Hour</span>
+          <span class="peak-value">9 PM – 10 PM</span>
+        </div>
+
+        <div class="buttons">
+          <button class="btn btn-primary">Show Bubble</button>
+          <button class="btn btn-secondary">Pause</button>
+        </div>
+
+        <div class="reset-btn">Reset Today's Data</div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- STATE 2: Calibration mode -->
+  <div>
+    <div class="label">Calibration Mode (Day 2 of 7)</div>
+    <div class="phone">
+      <div class="status-bar"><span>9:41</span></div>
+      <div class="screen">
+
+        <div class="card">
+          <div class="card-label">Today's Scrolls</div>
+          <div class="card-value">42</div>
+        </div>
+
+        <div class="time-selector">
+          <div class="chip active">7 Days</div>
+          <div class="chip">30 Days</div>
+          <div class="chip">3 Months</div>
+        </div>
+
+        <div class="chart-area">
+          <div class="avg-label">Average: 38 / day</div>
+          <div class="bars">
+            <div class="bar-col"><div class="bar-count">28</div><div class="bar" style="height:52px"></div><div class="bar-date">01</div></div>
+            <div class="bar-col"><div class="bar-count">45</div><div class="bar" style="height:84px"></div><div class="bar-date">02</div></div>
+            <div class="bar-col"><div class="bar-count">31</div><div class="bar" style="height:58px"></div><div class="bar-date">03</div></div>
+            <div class="bar-col"><div class="bar-count">52</div><div class="bar" style="height:100px; background:#b3261e"></div><div class="bar-date">04</div></div>
+            <div class="bar-col"><div class="bar-count">38</div><div class="bar" style="height:72px"></div><div class="bar-date">05</div></div>
+            <div class="bar-col"><div class="bar-count">22</div><div class="bar" style="height:42px"></div><div class="bar-date">06</div></div>
+            <div class="bar-col"><div class="bar-count">42</div><div class="bar" style="height:78px"></div><div class="bar-date">07</div></div>
+          </div>
+        </div>
+
+        <div class="peak-card">
+          <span class="peak-label">Peak Hour</span>
+          <span class="peak-value">9 PM – 10 PM</span>
+        </div>
+
+        <!-- Calibration banner -->
+        <div class="calibration-card">
+          <div class="cal-header">
+            <div class="cal-icon">📊</div>
+            <div class="cal-title">Calibration Mode</div>
+          </div>
+          <div class="cal-subtitle">
+            Nudge is learning your natural scroll habits. Controls unlock once we have your 7-day baseline.
+          </div>
+          <div class="cal-progress-row">
+            <span class="cal-days">Day 2 of 7</span>
+            <div class="progress-bar-bg">
+              <div class="progress-bar-fill" style="width: 28%"></div>
+            </div>
+            <span class="cal-days">5 left</span>
+          </div>
+        </div>
+
+        <!-- Disabled buttons with lock badges -->
+        <div class="buttons">
+          <div class="btn-wrapper">
+            <button class="btn btn-primary disabled">Show Bubble</button>
+            <div class="lock-badge">🔒</div>
+          </div>
+          <div class="btn-wrapper">
+            <button class="btn btn-disabled">Pause</button>
+            <div class="lock-badge">🔒</div>
+          </div>
+        </div>
+
+        <div class="reset-btn">Reset Today's Data</div>
+
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

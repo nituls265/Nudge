@@ -775,7 +775,7 @@ internal fun AppBreakdownSection(entries: List<Pair<String, Int>>) {
                             .fillMaxWidth(fillPct)
                             .fillMaxHeight()
                             .background(
-                                if (pkg == "unknown") Slate700 else Green,
+                                if (pkg == "unknown" || pkg == "other") Slate700 else Green,
                                 RoundedCornerShape(3.dp)
                             )
                     )
@@ -1114,6 +1114,7 @@ internal fun List<ScrollDay>.isAboveAvg(today: Int): Boolean {
 }
 
 internal fun resolveAppName(pm: PackageManager, packageName: String): String {
+    if (packageName == "other") return "📱 Other (untracked)"
     if (packageName == "unknown" || packageName.isEmpty()) return "Other"
     if (packageName == "laptop") return "💻 Laptop (Chrome)"
     return try {

@@ -68,4 +68,9 @@ dependencies {
 
     implementation("androidx.lifecycle:lifecycle-service:2.8.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.0")
+
+    // Phase-0 retention telemetry: persistent storage of the anonymous install ID
+    // + opt-in flag + offline event queue. (Thin Supabase POST uses HttpURLConnection;
+    // no analytics SDK.)
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
 }

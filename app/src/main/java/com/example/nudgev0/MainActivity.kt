@@ -18,6 +18,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.example.nudgev0.data.DayBoundary
 import com.example.nudgev0.data.NudgeRepository
+import com.example.nudgev0.telemetry.Telemetry
 import com.example.nudgev0.ui.theme.Nudgev0Theme
 import java.util.concurrent.TimeUnit
 
@@ -30,6 +31,10 @@ class MainActivity : ComponentActivity() {
         scheduleMidnightReset()
         NotificationHelper.createChannel(applicationContext)
         requestNotificationPermission()
+
+        // Retention telemetry (opt-in, off by default). init() only loads local
+        // state; nothing is sent until the user opts in via the consent prompt.
+        Telemetry.init(applicationContext)
 
         // Firebase anonymous sign-in — generates the Sync Code used to link the Chrome extension
         lifecycleScope.launch {
@@ -51,6 +56,8 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         checkAndResetIfDateChanged()
+        // Records one day_active per local calendar day (deduped). No-op until opt-in.
+        Telemetry.onAppOpen()
     }
 
     override fun onStop() {

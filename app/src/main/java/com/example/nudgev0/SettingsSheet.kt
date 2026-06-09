@@ -12,6 +12,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.nudgev0.telemetry.Telemetry
 import java.util.concurrent.TimeUnit
 
 // ── SettingsSheet ─────────────────────────────────────────────────────────────
@@ -127,6 +129,38 @@ fun SettingsSheet(vm: ScrollViewModel, onDismiss: () -> Unit) {
 
             // ── Laptop sync ───────────────────────────────────────────────────
             LaptopSyncCard(syncCode = syncCode, context = context)
+
+            Spacer(Modifier.height(20.dp))
+
+            // ── Anonymous analytics (opt-in retention telemetry) ──────────────
+            val telemetryOn by Telemetry.optedIn.collectAsState()
+            Row(
+                modifier          = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "Anonymous analytics",
+                        style      = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color      = MaterialTheme.colorScheme.onBackground
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        "Sends only an anonymous ID + the dates you open the app, so we " +
+                            "can see if Nudge helps. No personal data. Turning this off " +
+                            "deletes the ID.",
+                        style      = MaterialTheme.typography.bodySmall,
+                        color      = Slate500,
+                        lineHeight = 16.sp
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                Switch(
+                    checked         = telemetryOn,
+                    onCheckedChange = { on -> if (on) Telemetry.optIn() else Telemetry.optOut() }
+                )
+            }
 
             Spacer(Modifier.height(8.dp))
 

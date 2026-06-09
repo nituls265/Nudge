@@ -115,6 +115,16 @@ fun MainScreen(factory: ScrollViewModelFactory) {
     if (showSettings) {
         SettingsSheet(vm = vm, onDismiss = { showSettings = false })
     }
+
+    // One-time, opt-in retention consent prompt. Shows only until answered (null
+    // = still loading from disk, so show nothing yet).
+    val telemetryAnswered by com.example.nudgev0.telemetry.Telemetry.hasAnswered.collectAsState()
+    if (telemetryAnswered == false) {
+        com.example.nudgev0.telemetry.TelemetryConsentDialog(
+            onEnable  = { com.example.nudgev0.telemetry.Telemetry.optIn() },
+            onDecline = { com.example.nudgev0.telemetry.Telemetry.optOut() }
+        )
+    }
 }
 
 // ── Bottom nav bar ────────────────────────────────────────────────────────────

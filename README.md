@@ -115,10 +115,52 @@ Steps:
 3. Let Gradle sync, then run the `app` configuration on a device or emulator running Android 7.0 (API 24) or higher.
 4. On first launch, tap **Show Bubble** and grant the two permissions when prompted.
 
+## Privacy & telemetry
+
+Nudge is privacy-first. The on-device scroll/usage tracking **never leaves your
+phone** — it lives in a local Room database and (optionally) syncs only to *your
+own* Firebase project for the laptop-pairing feature.
+
+There is one optional, **opt-in** piece of telemetry whose only purpose is to
+measure whether people keep using Nudge over time (retention). It is **off by
+default**; a one-time prompt on first launch lets you turn it on, and you can
+turn it off any time under **Settings → Anonymous analytics**.
+
+**What is sent (only if you opt in):**
+
+- An **anonymous random ID** (a `UUID` generated on your device on first launch,
+  stored locally in DataStore). It is not derived from any hardware or account.
+- **`first_open`** — once, ever: the anonymous ID, a UTC timestamp, the app
+  version, and `platform: "android"`.
+- **`day_active`** — at most once per calendar day you open the app: the
+  anonymous ID, the date (`YYYY-MM-DD`, your device's local date), and the app
+  version.
+
+**What is NEVER sent or even read:** your scroll counts or content, app names,
+unlock/session data, accounts, location, IP-derived identity, and any device or
+advertising identifier (no `ANDROID_ID`, advertising ID, IMEI, MAC, or serial).
+There is no Google Analytics, no third-party tracker for this.
+
+**How it works:** events are queued locally and sent (a thin HTTPS POST) to a
+self-hosted Supabase Postgres table; they work offline and flush when the
+network returns. The destination is configured in
+`app/src/main/java/com/example/nudgev0/telemetry/TelemetryConfig.kt` — if left
+blank, nothing is sent.
+
+**How to opt out / delete:** toggle **Settings → Anonymous analytics** off. This
+stops all sending **and deletes the local anonymous ID** (a new one is only
+created if you opt in again). Uninstalling or clearing app data also removes it.
+
+Server schema, the insert-only Row-Level-Security policy, and the retention /
+DAU-WAU-MAU / stickiness queries live in [`supabase/`](supabase/).
+
 ## Roadmap / known gaps
 
 - Package id is still `com.example.nudgev0` — needs renaming before any Play Store release.
 - No unit/instrumentation tests beyond the scaffolded `ExampleUnitTest` and `ExampleInstrumentedTest`.
+- iOS is on the roadmap; the telemetry core (`telemetry/core/`) is pure Kotlin
+  with no platform imports, so it lifts into a KMP `commonMain` unchanged (the
+  `telemetry/android/` files become the `androidMain` actuals).
 
 ## License
 

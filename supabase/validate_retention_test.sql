@@ -74,9 +74,9 @@ insert into events_test (event_type, install_id, app_version, event_date) values
 -- Retention view = retention_queries.sql query #1, on events_test.
 create temp view v_ret as
 with cohorts as (
-    select install_id, min(timestamp_utc)::date as cohort_date
+    select install_id, min(event_date) as cohort_date
     from events_test
-    where event_type = 'first_open'
+    where event_type = 'day_active'
     group by install_id
 ),
 activity as (

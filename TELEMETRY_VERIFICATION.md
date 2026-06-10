@@ -32,7 +32,7 @@ repo is `AccessibilityServiceUtils.kt` reading `ACCESSIBILITY_ENABLED` (a featur
 check, **not** an identifier) — non-telemetry. Runtime payloads were also inspected
 (see Task 4 log): only the random `install_id`.
 
-## Task 3 — Retention SQL  ✅ logic correct · ⚠️ one off-by-one to decide on
+## Task 3 — Retention SQL  ✅ logic correct · off-by-one FIXED
 Self-asserting `supabase/validate_retention_test.sql` builds a separate
 `events_test` (production `events` untouched), 8 synthetic installs, asserts the
 known-good numbers, and drops itself. Could not execute Postgres here (none
@@ -48,13 +48,11 @@ Python model and a real `sqlite3` run of the same logic — both matching exactl
 
 DAU=3, WAU=4, MAU=6, stickiness=50%.
 
-**⚠️ FINDING (off-by-one cohort skew):** the cohort is computed from
+**FIXED (off-by-one cohort skew):** the cohort was computed from
 `min(timestamp_utc)::date` (**UTC**) while activity uses `event_date` (**device
-local**). For a user whose local date ≠ UTC date at first open (e.g. an evening
-user in the Americas), their cohort lands one day after their day-0 activity, so
-D1/D7/D30 are shifted and under-counted. **Recommended fix** — derive the cohort
-from the first local activity instead (equivalent to the first-open local day, and
-in the same calendar as the activity):
+local**), so for users whose local date ≠ UTC date at first open the D1/D7/D30
+were shifted/under-counted. `retention_queries.sql` (and the self-test) now derive
+the cohort from the first local activity, sharing the activity calendar:
 
 ```sql
 cohorts as (
@@ -63,6 +61,7 @@ cohorts as (
     group by install_id
 )
 ```
+Re-validated after the change — the synthetic numbers are unchanged (correct).
 
 **ℹ️ NOTE (convention):** D-N here is *exact-day* retention (active on day N
 exactly), not rolling ("active on or after day N"). That's intentional and

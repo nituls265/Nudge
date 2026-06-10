@@ -3,7 +3,9 @@
 -- Run in the Supabase SQL editor (service_role bypasses RLS).
 --
 -- Conventions:
---   • cohort        = the calendar date of an install's first_open.
+--   • cohort        = the install's FIRST local active day (its first_open day).
+--                     Computed from event_date (local) so cohort and activity
+--                     share one calendar — avoids a UTC-vs-local off-by-one.
 --   • "DN retention" = % of a cohort that has a day_active EXACTLY N days later
 --                      (classic day-N retention).
 --   • All activity uses day_active.event_date, the device-LOCAL calendar date,
@@ -19,9 +21,12 @@
 -- 1) RETENTION BY COHORT — D1 / D7 / D30
 -- ----------------------------------------------------------------------------
 with cohorts as (
-    select install_id, min(timestamp_utc)::date as cohort_date
+    -- first local active day per install = its first_open day, in the activity
+    -- calendar (local). first_open + the first day_active are queued together on
+    -- opt-in, so min(event_date) is the day the user first opened the app.
+    select install_id, min(event_date) as cohort_date
     from public.events
-    where event_type = 'first_open'
+    where event_type = 'day_active'
     group by install_id
 ),
 activity as (

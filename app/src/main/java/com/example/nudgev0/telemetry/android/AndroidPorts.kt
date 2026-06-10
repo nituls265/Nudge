@@ -7,6 +7,8 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import android.util.Log
+import com.example.nudgev0.BuildConfig
 import com.example.nudgev0.data.DayBoundary
 import com.example.nudgev0.telemetry.core.InstallIdGenerator
 import com.example.nudgev0.telemetry.core.TelemetryClock
@@ -83,6 +85,13 @@ class HttpUrlTransport(
     private val anonKey: String,
 ) : TelemetryTransport {
     override suspend fun postEvents(jsonArrayBody: String): Boolean = withContext(Dispatchers.IO) {
+        // Debug-inspection: print the EXACT JSON about to leave the device. Gated to
+        // debug builds via BuildConfig.DEBUG, so it is a no-op (and strippable) in
+        // release. Placed before the config check so payloads are visible even when
+        // no backend is configured yet.
+        if (BuildConfig.DEBUG) {
+            Log.d("NudgeTelemetry", "▶ events about to send: $jsonArrayBody")
+        }
         if (supabaseUrl.isBlank() || anonKey.isBlank()) return@withContext false
         var conn: HttpURLConnection? = null
         try {

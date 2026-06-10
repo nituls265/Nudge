@@ -39,6 +39,8 @@ android {
     }
     buildFeatures {
         compose = true
+        // BuildConfig.DEBUG gates the telemetry payload-inspection log (a no-op in release).
+        buildConfig = true
     }
 }
 
@@ -68,6 +70,10 @@ dependencies {
 
     implementation("androidx.lifecycle:lifecycle-service:2.8.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.0")
+
+    // Unit tests for the platform-agnostic telemetry core (JVM, in-memory fakes).
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
 
     // Phase-0 retention telemetry: persistent storage of the anonymous install ID
     // + opt-in flag + offline event queue. (Thin Supabase POST uses HttpURLConnection;

@@ -12,6 +12,6 @@ package com.example.nudgev0.telemetry
  * runs fine without a configured backend.
  */
 object TelemetryConfig {
-    const val SUPABASE_URL = ""       // e.g. "https://abcdxyz.supabase.co"
-    const val SUPABASE_ANON_KEY = ""  // e.g. "eyJhbGciOiJIUzI1NiIsInR5cCI6..."
+    const val SUPABASE_URL = "https://mvfdwgcknmskadhlujgk.supabase.co"
+    const val SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im12ZmR3Z2Nrbm1za2FkaGx1amdrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzODM3NTMsImV4cCI6MjA5Njk1OTc1M30.xN66ohuXKM6EnyYM1dt9-7ctgB29FLXFs8YeH27HqWE"
 }

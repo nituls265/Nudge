@@ -74,6 +74,16 @@ definition you want for the keep/kill call.
 `D NudgeTelemetry: ▶ events about to send: [{"event_type":"first_open",...}]`.
 No-op in release (`BuildConfig.DEBUG` is false; call is strippable).
 
+## Live end-to-end (after wiring real Supabase) — BUG FOUND & FIXED
+Wiring the real project surfaced a bug the unit tests + single-row curl missed:
+the app sends events as a **batch**, and PostgREST rejects a bulk insert whose
+objects have **different keys** (`PGRST102 "All object keys must match"`) — our
+`first_open` (has platform/timestamp_utc) and `day_active` (has event_date) had
+different shapes. Fixed by emitting a **uniform key set** in every event (null
+where N/A). Verified: the app now POSTs successfully (queue drains, HTTP 2xx);
+real `first_open` + `day_active` rows land in `events`. Added a debug-gated
+HTTP-error log so future POST failures are visible instead of silently swallowed.
+
 ## Task 5 — Manual QA checklist (~10 min)
 Do this once `TelemetryConfig.kt` has your real Supabase URL + anon key and
 `telemetry_schema.sql` has been run.

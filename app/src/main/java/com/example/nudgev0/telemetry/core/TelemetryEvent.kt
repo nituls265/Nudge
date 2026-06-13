@@ -19,6 +19,11 @@ sealed interface TelemetryEvent {
     /** Flat JSON object for one `events` row. */
     fun toJson(): String
 
+    // NOTE: both event types emit the SAME full set of keys (null where a column
+    // doesn't apply). This is required for the Supabase/PostgREST bulk insert — a
+    // batch with differing keys per object is rejected (PGRST102 "All object keys
+    // must match"). Keeping one uniform row shape also keeps the table tidy.
+
     /** Sent ONCE, ever, on the first launch after opt-in. */
     data class FirstOpen(
         override val installId: String,
@@ -33,6 +38,7 @@ sealed interface TelemetryEvent {
             "app_version"   to appVersion,
             "platform"      to platform,
             "timestamp_utc" to timestampUtc,
+            "event_date"    to null,
         )
     }
 
@@ -44,22 +50,27 @@ sealed interface TelemetryEvent {
     ) : TelemetryEvent {
         override val eventType get() = "day_active"
         override fun toJson(): String = jsonObject(
-            "event_type"  to eventType,
-            "install_id"  to installId,
-            "app_version" to appVersion,
-            "event_date"  to date,
+            "event_type"    to eventType,
+            "install_id"    to installId,
+            "app_version"   to appVersion,
+            "platform"      to null,
+            "timestamp_utc" to null,
+            "event_date"    to date,
         )
     }
 }
 
 // ── Minimal, dependency-free JSON (so the core pulls in no serialization lib) ──
 
-/** Build a flat JSON object string. Null values are omitted. */
+/**
+ * Build a flat JSON object string. Null values are emitted as JSON `null` (NOT
+ * omitted) so every event serialises the same key set — required for the
+ * Supabase bulk insert (see TelemetryEvent).
+ */
 internal fun jsonObject(vararg pairs: Pair<String, String?>): String =
-    pairs.filter { it.second != null }
-        .joinToString(prefix = "{", postfix = "}", separator = ",") { (k, v) ->
-            jsonString(k) + ":" + jsonString(v!!)
-        }
+    pairs.joinToString(prefix = "{", postfix = "}", separator = ",") { (k, v) ->
+        jsonString(k) + ":" + (if (v == null) "null" else jsonString(v))
+    }
 
 /** JSON-escape and quote a string using only multiplatform-safe Kotlin. */
 internal fun jsonString(s: String): String {

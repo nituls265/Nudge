@@ -107,8 +107,14 @@ class HttpUrlTransport(
                 setRequestProperty("Prefer", "return=minimal")
             }
             conn.outputStream.use { it.write(jsonArrayBody.toByteArray(Charsets.UTF_8)) }
-            conn.responseCode in 200..299
+            val code = conn.responseCode
+            if (BuildConfig.DEBUG && code !in 200..299) {
+                val err = runCatching { conn.errorStream?.bufferedReader()?.readText() }.getOrNull()
+                Log.w("NudgeTelemetry", "POST failed: HTTP $code — $err")
+            }
+            code in 200..299
         } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.w("NudgeTelemetry", "POST threw: ${e.javaClass.simpleName}: ${e.message}")
             false   // offline / error → keep queued, retry later
         } finally {
             conn?.disconnect()

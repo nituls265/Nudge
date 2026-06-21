@@ -65,7 +65,7 @@ function syncIfChanged() {
     type:   'SCROLL_DELTA',
     delta,
     domain: location.hostname.replace('www.', ''),
-    date:   new Date().toISOString().slice(0, 10),
+    date:   (() => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; })(),
   }).catch((err) => console.warn('[Nudge] sendMessage failed:', err));
   lastSyncedUnits = sessionUnits;
 }

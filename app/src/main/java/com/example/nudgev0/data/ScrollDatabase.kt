@@ -46,6 +46,9 @@ interface ScrollDao {
     @Query("SELECT hour, SUM(count) as total FROM scroll_hours WHERE date >= :startDate GROUP BY hour ORDER BY total DESC LIMIT 1")
     fun getPeakHourSince(startDate: String): Flow<HourTotal?>
 
+    @Query("SELECT hour, SUM(count) as total FROM scroll_hours WHERE date = :date GROUP BY hour ORDER BY total DESC LIMIT 1")
+    suspend fun getPeakHourForDate(date: String): HourTotal?
+
     @Query("DELETE FROM scroll_hours WHERE date = :date")
     suspend fun deleteHoursForDate(date: String)
 }
@@ -89,6 +92,9 @@ interface UnlockDao {
     @Query("SELECT hour, SUM(count) as total FROM unlock_hours WHERE date >= :startDate GROUP BY hour ORDER BY total DESC LIMIT 1")
     fun getPeakHourSince(startDate: String): Flow<HourTotal?>
 
+    @Query("SELECT hour, SUM(count) as total FROM unlock_hours WHERE date = :date GROUP BY hour ORDER BY total DESC LIMIT 1")
+    suspend fun getPeakHourForDate(date: String): HourTotal?
+
     @Query("DELETE FROM unlock_hours WHERE date = :date")
     suspend fun deleteHoursForDate(date: String)
 }
@@ -114,6 +120,32 @@ interface AppScrollDao {
 
     @Query("DELETE FROM app_scroll_history WHERE date = :date")
     suspend fun deleteForDate(date: String)
+}
+
+// ── Wellness entities ─────────────────────────────────────────────────────────
+
+@Entity(tableName = "wellness_history")
+data class WellnessDay(
+    @PrimaryKey val date: String,
+    val score: Int,
+    val tier: String,               // WellnessTier.name
+    val scrollVolume: Int,
+    val sessionBehaviour: Int,
+    val unlockFrequency: Int,
+    val timeHygiene: Int,
+    val appQuality: Int
+)
+
+@Dao
+interface WellnessDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertOrUpdate(day: WellnessDay)
+
+    @Query("SELECT * FROM wellness_history WHERE date >= :startDate ORDER BY date ASC")
+    fun getHistorySince(startDate: String): Flow<List<WellnessDay>>
+
+    @Query("SELECT * FROM wellness_history WHERE date = :date")
+    suspend fun getDay(date: String): WellnessDay?
 }
 
 // ── Migrations ───────────────────────────────────────────────────────────────
@@ -145,17 +177,26 @@ val MIGRATION_3_4 = object : Migration(3, 4) {
     }
 }
 
+val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL(
+            "CREATE TABLE IF NOT EXISTS `wellness_history` (`date` TEXT NOT NULL, `score` INTEGER NOT NULL, `tier` TEXT NOT NULL, `scrollVolume` INTEGER NOT NULL, `sessionBehaviour` INTEGER NOT NULL, `unlockFrequency` INTEGER NOT NULL, `timeHygiene` INTEGER NOT NULL, `appQuality` INTEGER NOT NULL, PRIMARY KEY(`date`))"
+        )
+    }
+}
+
 // ── Database ─────────────────────────────────────────────────────────────────
 
 @Database(
-    entities = [ScrollDay::class, ScrollHour::class, UnlockDay::class, UnlockHour::class, AppScrollDay::class],
-    version = 4,
+    entities = [ScrollDay::class, ScrollHour::class, UnlockDay::class, UnlockHour::class, AppScrollDay::class, WellnessDay::class],
+    version = 5,
     exportSchema = false
 )
 abstract class ScrollDatabase : RoomDatabase() {
     abstract fun scrollDao(): ScrollDao
     abstract fun unlockDao(): UnlockDao
     abstract fun appScrollDao(): AppScrollDao
+    abstract fun wellnessDao(): WellnessDao
 
     companion object {
         @Volatile private var INSTANCE: ScrollDatabase? = null
@@ -167,7 +208,7 @@ abstract class ScrollDatabase : RoomDatabase() {
                     ScrollDatabase::class.java,
                     "scroll_database"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                     .build()
                 INSTANCE = instance
                 instance

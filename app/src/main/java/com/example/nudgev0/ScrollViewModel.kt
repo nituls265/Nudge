@@ -148,29 +148,30 @@ class ScrollViewModel(
 
     // ── App breakdown ─────────────────────────────────────────────────────────
 
-    // Today's scroll sources: phone per-app counts (from the DB — the most
-    // complete attribution, accumulated across restarts) + today's laptop count.
-    // Scoped to TODAY (not the selected range) so it matches the home-screen
-    // Scrolls pill and the "today" bar; tapping a PAST bar swaps in that day's
-    // breakdown via fetchHistoricalInsights().
-    //
-    // The UI computes each percentage against the SUM of these shown sources, so
-    // they add up to 100%. On a normal day the per-app attribution is complete
-    // (every counted scroll increments exactly one app), so this equals each
-    // source's true share. (On a day whose attribution was corrupted by repeated
-    // service restarts, a heavily-used source can look inflated, because the
-    // unlabelled scrolls are no longer part of the denominator.)
+    // Scroll sources aggregated over the selected time range (7 / 30 / 90 days).
+    // The DB query already SUMs per-app counts across the range; laptop counts
+    // are summed from laptopHistory over the same window.
+    // Tapping a past bar in the chart swaps in that day's breakdown via
+    // fetchHistoricalInsights() — this flow covers the "no bar selected" state.
+    @OptIn(ExperimentalCoroutinesApi::class)
     val appBreakdown: StateFlow<List<Pair<String, Int>>> =
-        combine(
-            repo.appTotalsBetween(today, DayBoundary.shift(today, 1)),
-            laptopCount
-        ) { dbToday, laptopToday ->
-            val apps = dbToday
-                .filter { !isSystemPackage(it.packageName) }
-                .associate { it.packageName to it.total }
-                .toMutableMap()
-            if (laptopToday > 0) apps["laptop"] = laptopToday
-            apps.entries.sortedByDescending { it.value }.map { it.toPair() }
+        _timeRange.flatMapLatest { days ->
+            val startDate = DayBoundary.daysAgo(days - 1)
+            val endDate   = DayBoundary.shift(today, 1)
+            combine(
+                repo.appTotalsBetween(startDate, endDate),
+                laptopHistory
+            ) { dbRows, laptopMap ->
+                val apps = dbRows
+                    .filter { !isSystemPackage(it.packageName) }
+                    .associate { it.packageName to it.total }
+                    .toMutableMap()
+                val laptopTotal = laptopMap.entries
+                    .filter { it.key >= startDate }
+                    .sumOf { it.value }
+                if (laptopTotal > 0) apps["laptop"] = laptopTotal
+                apps.entries.sortedByDescending { it.value }.map { it.toPair() }
+            }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // ── 7-day scroll average for wellness baseline ────────────────────────────

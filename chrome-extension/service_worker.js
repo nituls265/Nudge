@@ -13,6 +13,16 @@ const FIREBASE_DB_URL = 'https://nudgev0-default-rtdb.firebaseio.com';
 const SYNC_ALARM      = 'nudge_firebase_sync';
 const ALARM_INTERVAL  = 5; // minutes
 
+// Local date — matches Android's SimpleDateFormat("yyyy-MM-dd") which uses local timezone.
+// Do NOT use toISOString() — that returns UTC, which can be a day ahead in US timezones.
+function localDateString() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 // ─── Badge helpers ────────────────────────────────────────────────────────────
 function updateBadge(total) {
   const text = total > 0 ? (total > 9999 ? '9999' : String(total)) : '';
@@ -22,7 +32,7 @@ function updateBadge(total) {
 
 // Badge = synced (persisted in storage) + pending (local buffer)
 async function refreshBadge(pendingScrolls) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateString();
 
   // Get persisted synced count for today
   const { syncedCounts } = await chrome.storage.local.get(['syncedCounts']);
@@ -39,7 +49,25 @@ async function refreshBadge(pendingScrolls) {
 }
 
 // ─── Initialise badge on service worker startup ───────────────────────────────
-chrome.storage.local.get(['pendingScrolls', 'syncedCounts'], ({ pendingScrolls, syncedCounts }) => {
+// Also bootstrap syncedCounts from Firebase in case local storage was cleared
+// (reinstall, clear data) — prevents the next flush overwriting a higher count.
+chrome.storage.local.get(['pendingScrolls', 'syncedCounts', 'nudgeSyncId'], async ({ pendingScrolls, syncedCounts, nudgeSyncId }) => {
+  if (nudgeSyncId) {
+    const today = localDateString();
+    const localSynced = (syncedCounts ?? {})[today] ?? 0;
+    try {
+      const res = await fetch(`${FIREBASE_DB_URL}/users/${nudgeSyncId}/laptop/${today}.json`);
+      if (res.ok) {
+        const data = await res.json();
+        const firebaseCount = data?.laptop_count ?? 0;
+        if (firebaseCount > localSynced) {
+          const updated = { ...(syncedCounts ?? {}), [today]: firebaseCount };
+          await chrome.storage.local.set({ syncedCounts: updated });
+          console.log(`[Nudge] Bootstrapped syncedCounts from Firebase: ${firebaseCount}`);
+        }
+      }
+    } catch (_) {}
+  }
   refreshBadge(pendingScrolls ?? {});
 });
 

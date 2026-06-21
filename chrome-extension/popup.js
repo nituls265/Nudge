@@ -86,12 +86,24 @@ async function showLinkedView(syncId) {
   }, 2000);
 }
 
-// ─── Fetch synced count from Firebase (updates syncedCount) ──────────────────
+// ─── Fetch synced count from Firebase and reconcile with local storage ────────
+// If Firebase has a higher count than our local syncedCounts (e.g. after a
+// reinstall that wiped storage), update local so the next flush doesn't
+// overwrite Firebase with a lower number.
 async function fetchFirebaseCount(syncId) {
   const today = todayString();
   try {
     const res  = await fetch(`${FIREBASE_DB_URL}/users/${syncId}/laptop/${today}.json`);
     const data = res.ok ? await res.json() : null;
+
+    if (data?.laptop_count) {
+      const { syncedCounts } = await chrome.storage.local.get(['syncedCounts']);
+      const localSynced = (syncedCounts ?? {})[today] ?? 0;
+      if (data.laptop_count > localSynced) {
+        const updated = { ...(syncedCounts ?? {}), [today]: data.laptop_count };
+        await chrome.storage.local.set({ syncedCounts: updated });
+      }
+    }
 
     if (data?.synced_at) {
       lastSynced.textContent = `Last synced ${timeSince(data.synced_at)}`;
@@ -135,7 +147,8 @@ function updateDisplay() {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function todayString() {
-  return new Date().toISOString().slice(0, 10);
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 function timeSince(epochMs) {

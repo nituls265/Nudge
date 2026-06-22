@@ -49,15 +49,28 @@ import kotlin.math.abs
 // ── Shared colour tokens ──────────────────────────────────────────────────────
 // Not private so HomeTab / HistoryTab / SettingsSheet (same package) can use them.
 
-val Green   = Color(0xFF34D399)
-val Blue    = Color(0xFF60A5FA)
-val Purple  = Color(0xFFA78BFA)
-val Red     = Color(0xFFEF4444)
+// Semantic accents — each hue has ONE job (design-system palette policy v2).
+val Green  = Color(0xFF34D399) // brand / primary / success / "good outcome"
+val Red    = Color(0xFFEF4444) // destructive / over-threshold / error
+val Orange = Color(0xFFF97316) // warning / flagged apps
+
+// Muted metric trio — low chroma so data categories never compete with status.
+// Use these for Scrolls / Unlocks / Screen Time labels, dots, and chart bars.
+val MetricScrolls = Color(0xFF8DBFAA) // oklch(0.72 0.05 165) sage green
+val MetricUnlocks = Color(0xFF85A3C4) // oklch(0.72 0.05 250) periwinkle
+val MetricTime    = Color(0xFFA490BF) // oklch(0.72 0.05 305) mauve
+
+// Neutral slate ramp
 val Slate900 = Color(0xFF0F172A)
 val Slate800 = Color(0xFF1E293B)
 val Slate700 = Color(0xFF334155)
 val Slate500 = Color(0xFF64748B)
 val Slate400 = Color(0xFF94A3B8)
+
+// Retired as active accents — kept so tier-scale references compile unchanged.
+// Blue = tier-balanced (70–84), Purple was metric-time (now MetricTime).
+val Blue   = Color(0xFF60A5FA) // tier-balanced only
+val Purple = MetricTime        // compat shim → MetricTime
 
 // ── Navigation ────────────────────────────────────────────────────────────────
 
@@ -741,7 +754,7 @@ internal fun AppBreakdownSection(entries: List<Pair<String, Int>>) {
             Text(
                 if (expanded) "Show less ▲" else "+$hidden more ▼",
                 style      = MaterialTheme.typography.labelSmall,
-                color      = Green,
+                color      = MetricScrolls,
                 fontWeight = FontWeight.Bold,
                 fontSize   = 11.sp,
                 modifier   = Modifier.clickable { expanded = !expanded }
@@ -775,7 +788,7 @@ internal fun AppBreakdownSection(entries: List<Pair<String, Int>>) {
                         color = Slate500, fontSize = 11.sp)
                     Spacer(Modifier.width(6.dp))
                     Text("$pct%", style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold, color = Green, fontSize = 12.sp)
+                        fontWeight = FontWeight.Bold, color = MetricScrolls, fontSize = 12.sp)
                 }
                 Spacer(Modifier.height(5.dp))
                 Box(
@@ -787,7 +800,10 @@ internal fun AppBreakdownSection(entries: List<Pair<String, Int>>) {
                             .fillMaxWidth(fillPct)
                             .fillMaxHeight()
                             .background(
-                                if (pkg == "unknown" || pkg == "other") Slate700 else Green,
+                                when {
+                                    pkg == "unknown" || pkg == "other" -> Slate700
+                                    else -> MetricScrolls
+                                },
                                 RoundedCornerShape(3.dp)
                             )
                     )

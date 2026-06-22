@@ -10,34 +10,42 @@ val Purple40 = Color(0xFF6650a4)
 val PurpleGrey40 = Color(0xFF625b71)
 val Pink40 = Color(0xFF7D5260)
 
-// --- 1. The Raw Palette (The "Ingredients") ---
-val Slate900 = Color(0xFF0F172A) // Deep Navy Background
-val Slate50 = Color(0xFFF8FAFC)  // White Text
-val Slate400 = Color(0xFF94A3B8) // Grey Secondary Text
-val Emerald400 = Color(0xFF34D399) // Success Green
-val Red500 = Color(0xFFEF4444)     // Error Red
-val Slate950 = Color(0xFFFFFF) // Deep Navy Background
+// --- 1. The Raw Slate Ramp ---
+val Slate950 = Color(0xFF0B1120) // Deepest inset / chart tracks
+val Slate900 = Color(0xFF0F172A) // App background (Deep Navy)
+val Slate800 = Color(0xFF1E293B) // Card / surface
+val Slate700 = Color(0xFF334155) // Hairline dividers
+val Slate500 = Color(0xFF64748B) // Tertiary text
+val Slate400 = Color(0xFF94A3B8) // Secondary text / labels
+val Slate50  = Color(0xFFF8FAFC) // Primary text (white)
 
-// --- 2. The Semantic Colors (The "Usage") ---
-// This is how we map colors to their job.
-// If you want to change the background later, you only change it HERE.
+// --- 2. Semantic Accents (one hue = one job) ---
+val Emerald400 = Color(0xFF34D399) // Brand / primary / success
+val Red500     = Color(0xFFEF4444) // Destructive / over-threshold
+val Orange500  = Color(0xFFF97316) // Warning / flagged apps
 
-val AppBackground = Slate950
-val PrimaryText = Slate50
+// --- 3. Muted Metric Trio ---
+// Low chroma (~oklch C=0.05), ~72% lightness — reads as calm "data",
+// never competing with the punchy semantic or tier palette.
+val MetricScrolls = Color(0xFF8DBFAA) // oklch(0.72 0.05 165) — muted sage green
+val MetricUnlocks = Color(0xFF85A3C4) // oklch(0.72 0.05 250) — muted periwinkle
+val MetricTime    = Color(0xFFA490BF) // oklch(0.72 0.05 305) — muted mauve
+
+// --- 4. Semantic Aliases ---
+val AppBackground = Slate900
+val PrimaryText   = Slate50
 val SecondaryText = Slate400
-val AccentColor = Emerald400
-val ErrorColor = Red500
+val AccentColor   = Emerald400
+val ErrorColor    = Red500
 
-// --- 3. The Frost Effects ---
-// We can define complex Brushes and Alphas here too!
-
-val FrostBorder = Color(0x4DFFFFFF) // 30% White
+// --- 5. Frost Effects ---
+val FrostBorder = Color(0x4DFFFFFF) // border-white/30
 
 val FrostGradient = Brush.linearGradient(
     colors = listOf(
-        Color(0x4D2DD4BF), // Teal-400 (30%)
-        Color(0x4D34D399)  // Emerald-400 (30%)
+        Color(0x4D2DD4BF), // teal-400 / 30%
+        Color(0x4D34D399)  // emerald-400 / 30%
     )
 )
 
-val GlassButtonWhite = Color(0x33FFFFFF) // 20% White
+val GlassButtonWhite = Color(0x33FFFFFF) // 20% white glass

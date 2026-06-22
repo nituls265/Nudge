@@ -313,20 +313,23 @@ private fun CompactMetricStrip(
                 "📱$phoneScrolls+💻$laptopScrolls"
             else
                 totalScrolls.toString()
-            MetricPill(label = "Scrolls",     value = scrollValue,                   color = Green)
+            MetricPill(label = "Scrolls",     value = scrollValue,                       color = MetricScrolls)
 
             // Thin divider
             Box(modifier = Modifier.width(1.dp).height(30.dp).background(Slate700))
 
-            MetricPill(label = "Unlocks",     value = unlocks.toString(),            color = Blue)
+            MetricPill(label = "Unlocks",     value = unlocks.toString(),                color = MetricUnlocks)
 
             Box(modifier = Modifier.width(1.dp).height(30.dp).background(Slate700))
 
-            MetricPill(label = "Screen Time", value = formatTotalMinutes(screenTimeMin), color = Purple)
+            MetricPill(label = "Screen Time", value = formatTotalMinutes(screenTimeMin), color = MetricTime)
         }
     }
 }
 
+// MetricPill v2: value in neutral primary text (calm data, not status).
+// Category keyed by a small muted dot beside the label — much quieter than
+// a fully-coloured value, so metrics never compete with tier/score hues.
 @Composable
 private fun MetricPill(label: String, value: String, color: Color) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -334,16 +337,23 @@ private fun MetricPill(label: String, value: String, color: Color) {
             value,
             style      = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.ExtraBold,
-            color      = color,
+            color      = MaterialTheme.colorScheme.onBackground,
             maxLines   = 1
         )
-        Spacer(Modifier.height(2.dp))
-        Text(
-            label,
-            style    = MaterialTheme.typography.labelSmall,
-            color    = Slate500,
-            fontSize = 10.sp
-        )
+        Spacer(Modifier.height(6.dp))
+        Row(
+            verticalAlignment     = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            Box(modifier = Modifier.size(6.dp).background(color, androidx.compose.foundation.shape.CircleShape))
+            Text(
+                label,
+                style    = MaterialTheme.typography.labelSmall,
+                color    = Slate400,
+                fontSize = 10.5.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
     }
 }
 

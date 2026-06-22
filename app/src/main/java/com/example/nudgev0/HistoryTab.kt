@@ -48,9 +48,9 @@ fun HistoryTab(vm: ScrollViewModel, onSettingsClick: () -> Unit) {
     var wellnessSelectedIdx  by remember(selectedRange) { mutableStateOf<Int?>(null) }
 
     val accentColor = when (metricTab) {
-        "scrolls" -> Green
-        "unlocks" -> Blue
-        else      -> Purple
+        "scrolls" -> MetricScrolls
+        "unlocks" -> MetricUnlocks
+        else      -> MetricTime
     }
 
     val activeChart = when (metricTab) {
@@ -149,9 +149,9 @@ fun HistoryTab(vm: ScrollViewModel, onSettingsClick: () -> Unit) {
 
         // Tab toggle
         Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
-            TabButton("Scrolls", metricTab == "scrolls", Green,  Modifier.weight(1f)) { metricTab = "scrolls" }
-            TabButton("Unlocks", metricTab == "unlocks", Blue,   Modifier.weight(1f)) { metricTab = "unlocks" }
-            TabButton("Time",    metricTab == "time",    Purple, Modifier.weight(1f)) { metricTab = "time"    }
+            TabButton("Scrolls", metricTab == "scrolls", MetricScrolls, Modifier.weight(1f)) { metricTab = "scrolls" }
+            TabButton("Unlocks", metricTab == "unlocks", MetricUnlocks, Modifier.weight(1f)) { metricTab = "unlocks" }
+            TabButton("Time",    metricTab == "time",    MetricTime,    Modifier.weight(1f)) { metricTab = "time"    }
         }
         Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Slate800))
 
@@ -241,7 +241,7 @@ private fun WellnessDayBreakdown(point: WellnessHistoryPoint) {
 
 @Composable
 private fun ScrollInsights(peakHour: String, breakdown: List<Pair<String, Int>>) {
-    InsightCard(Modifier.fillMaxWidth(), "Peak Hour", peakHour, Green)
+    InsightCard(Modifier.fillMaxWidth(), "Peak Hour", peakHour, MetricScrolls)
     if (breakdown.isNotEmpty()) {
         Spacer(Modifier.height(16.dp))
         HorizontalDivider(color = Slate800)
@@ -255,9 +255,9 @@ private fun UnlockInsights(
     firstMs: Long, lastMs: Long, avgMin: Float, longest: Int, peakHour: String
 ) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        InsightCard(Modifier.weight(1f), "First Unlock", formatTime(firstMs), Blue)
+        InsightCard(Modifier.weight(1f), "First Unlock", formatTime(firstMs), MetricUnlocks)
         InsightCard(Modifier.weight(1f), "Last Unlock",  formatTime(lastMs),
-            if (isLateNight(lastMs)) Red else Blue)
+            if (isLateNight(lastMs)) Red else MetricUnlocks)
     }
     Spacer(Modifier.height(10.dp))
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -267,7 +267,7 @@ private fun UnlockInsights(
             if (longest > 20) Red else MaterialTheme.colorScheme.onBackground)
     }
     Spacer(Modifier.height(10.dp))
-    InsightCard(Modifier.fillMaxWidth(), "Peak Hour", peakHour, Blue)
+    InsightCard(Modifier.fillMaxWidth(), "Peak Hour", peakHour, MetricUnlocks)
 }
 
 @Composable
@@ -278,13 +278,13 @@ private fun ScreenTimeInsights(
     val displayTotal = totalFromHi ?: liveTotalMin
     InsightCard(
         Modifier.fillMaxWidth(), "Total Screen Time", formatTotalMinutes(displayTotal),
-        if (displayTotal > 120) Red else Purple
+        if (displayTotal > 120) Red else MetricTime
     )
     Spacer(Modifier.height(10.dp))
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        InsightCard(Modifier.weight(1f), "Avg Session",     formatMinutes(avgMin), Purple)
+        InsightCard(Modifier.weight(1f), "Avg Session",     formatMinutes(avgMin), MetricTime)
         InsightCard(Modifier.weight(1f), "Longest Session", formatMinutes(longest.toFloat()),
-            if (longest > 30) Red else Purple)
+            if (longest > 30) Red else MetricTime)
     }
 }
 

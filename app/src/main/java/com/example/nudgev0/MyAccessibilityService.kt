@@ -217,6 +217,20 @@ class MyAccessibilityService : AccessibilityService() {
         val today = DayBoundary.today()
 
         if (currentDayString.isNotEmpty() && currentDayString != today) {
+            // A new day started between the last scroll and this unlock.
+            // Save yesterday's scroll total and reset so that when the first
+            // scroll event arrives today it doesn't inherit the old count.
+            val prevDate  = currentDayString
+            val prevCount = _scrollCount.value
+            val prevHours = hourlyScrollCounts.toMap()
+            val prevApps  = _appScrollCounts.value.toMap()
+            serviceScope.launch(Dispatchers.IO) {
+                try {
+                    repository.persistScrollDay(prevDate, prevCount, prevHours, prevApps)
+                } catch (e: Exception) { e.printStackTrace() }
+            }
+            resetScrollCount()
+            hourlyScrollCounts.clear()
             resetUnlockCount()
             hourlyUnlockCounts.clear()
         }

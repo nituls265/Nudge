@@ -9,6 +9,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ArrowUpward
+import androidx.compose.material.icons.outlined.BarChart
+import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -157,9 +161,9 @@ private fun ScoreRingHero(
                 )
             }
 
-            // Emoji + numeric score inside the ring
+            // Tier icon + numeric score inside the ring
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(score.tier.emoji, fontSize = 24.sp)
+                TierIcon(tier = score.tier, tint = tierColor, size = 24.dp)
                 Text(
                     animatedScore.toInt().toString(),
                     style         = MaterialTheme.typography.headlineLarge,
@@ -186,13 +190,25 @@ private fun ScoreRingHero(
         // Only shown once we have at least one full prior day in the DB
         if (delta != null) {
             val isPositive = delta >= 0
-            val deltaText  = if (isPositive) "↑ +$delta vs yesterday" else "↓ $delta vs yesterday"
-            Text(
-                deltaText,
-                style      = MaterialTheme.typography.labelMedium,
-                color      = if (isPositive) Green else Red,
-                fontWeight = FontWeight.SemiBold
-            )
+            val deltaColor = if (isPositive) Green else Red
+            Row(
+                verticalAlignment     = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(3.dp)
+            ) {
+                Icon(
+                    imageVector        = if (isPositive) Icons.Outlined.ArrowUpward
+                                        else Icons.Outlined.ArrowUpward,
+                    contentDescription = null,
+                    tint               = deltaColor,
+                    modifier           = Modifier.size(13.dp)
+                )
+                Text(
+                    if (isPositive) "+$delta vs yesterday" else "$delta vs yesterday",
+                    style      = MaterialTheme.typography.labelMedium,
+                    color      = deltaColor,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
         }
 
         // ── Trend label — "Best in X days" etc. ──────────────────────────────
@@ -256,7 +272,12 @@ private fun CalibrationRingHero(daysRemaining: Int) {
                 )
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("📊", fontSize = 24.sp)
+                Icon(
+                    imageVector        = Icons.Outlined.BarChart,
+                    contentDescription = null,
+                    tint               = Blue,
+                    modifier           = Modifier.size(24.dp)
+                )
                 Text(
                     "$currentDay/7",
                     style         = MaterialTheme.typography.headlineMedium,
@@ -403,7 +424,12 @@ private fun FlaggedAppCallout(apps: List<String>) {
         verticalAlignment     = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Text("⚠️", fontSize = 12.sp)
+        Icon(
+            imageVector        = Icons.Outlined.Warning,
+            contentDescription = null,
+            tint               = Orange,
+            modifier           = Modifier.size(14.dp)
+        )
         Text(
             "App quality reduced by",
             style    = MaterialTheme.typography.labelSmall,

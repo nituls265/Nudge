@@ -22,6 +22,11 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.BarChart
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.LaptopChromebook
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -160,14 +165,14 @@ internal fun BottomNavBar(
                 .height(62.dp)
         ) {
             NavTabItem(
-                icon     = "🏠",
+                icon     = Icons.Outlined.Home,
                 label    = "Home",
                 selected = selectedTab == AppTab.HOME,
                 modifier = Modifier.weight(1f),
                 onClick  = { onSelect(AppTab.HOME) }
             )
             NavTabItem(
-                icon     = "📊",
+                icon     = Icons.Outlined.BarChart,
                 label    = "History",
                 selected = selectedTab == AppTab.HISTORY,
                 modifier = Modifier.weight(1f),
@@ -179,16 +184,12 @@ internal fun BottomNavBar(
 
 @Composable
 private fun NavTabItem(
-    icon: String, label: String, selected: Boolean,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String, selected: Boolean,
     modifier: Modifier, onClick: () -> Unit
 ) {
     val color = if (selected) Green else Slate500
 
-    // The outer Box carries weight(1f) — correct inside a Row.
-    // The clickable wraps the ENTIRE cell so any tap anywhere in the tab works.
-    // The inner Column uses Modifier.fillMaxSize() (not the outer modifier) so
-    // weight isn't re-applied inside a Box (it has no effect there and caused
-    // the content to collapse to the top-left corner).
     Box(
         modifier = modifier
             .fillMaxHeight()
@@ -196,9 +197,8 @@ private fun NavTabItem(
                 indication        = null,
                 interactionSource = remember { MutableInteractionSource() }
             ) { onClick() },
-        contentAlignment = Alignment.Center          // centres icon+label in the cell
+        contentAlignment = Alignment.Center
     ) {
-        // Selected indicator — 2 dp line pinned to the top of the cell
         if (selected) {
             Box(
                 modifier = Modifier
@@ -208,15 +208,15 @@ private fun NavTabItem(
                     .background(Green)
             )
         }
-
-        // Icon + label — centred by the Box's contentAlignment
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Text(
-                icon,
-                fontSize = if (selected) 20.sp else 18.sp
+            Icon(
+                imageVector        = icon,
+                contentDescription = label,
+                tint               = color,
+                modifier           = Modifier.size(if (selected) 22.dp else 20.dp)
             )
             Spacer(Modifier.height(2.dp))
             Text(
@@ -262,7 +262,14 @@ internal fun ScreenHeader(onSettingsClick: () -> Unit) {
                     interactionSource = remember { MutableInteractionSource() }
                 ) { onSettingsClick() },
             contentAlignment = Alignment.Center
-        ) { Text("⚙️", fontSize = 13.sp) }
+        ) {
+            Icon(
+                imageVector        = Icons.Outlined.Settings,
+                contentDescription = "Settings",
+                tint               = Slate400,
+                modifier           = Modifier.size(15.dp)
+            )
+        }
     }
 }
 
@@ -336,7 +343,14 @@ fun CalibrationCard(daysRemaining: Int) {
                 Box(
                     modifier         = Modifier.size(28.dp).background(MaterialTheme.colorScheme.primary, CircleShape),
                     contentAlignment = Alignment.Center
-                ) { Text("📊", fontSize = 13.sp) }
+                ) {
+                    Icon(
+                        imageVector        = Icons.Outlined.BarChart,
+                        contentDescription = null,
+                        tint               = MaterialTheme.colorScheme.onPrimary,
+                        modifier           = Modifier.size(15.dp)
+                    )
+                }
                 Text(
                     "Calibration Mode",
                     style      = MaterialTheme.typography.titleSmall,
@@ -411,7 +425,12 @@ internal fun LaptopSyncCard(syncCode: String, context: Context) {
                 verticalAlignment     = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text("💻", fontSize = 16.sp)
+                Icon(
+                    imageVector        = Icons.Outlined.LaptopChromebook,
+                    contentDescription = null,
+                    tint               = MaterialTheme.colorScheme.onBackground,
+                    modifier           = Modifier.size(18.dp)
+                )
                 Text(
                     "Chrome Extension Sync",
                     style      = MaterialTheme.typography.titleSmall,
@@ -1063,15 +1082,27 @@ internal fun TierScaleBar(currentScore: Int) {
         Spacer(Modifier.height(4.dp))
         Row(modifier = Modifier.fillMaxWidth()) {
             segments.forEach { (tier, w) ->
-                val isActive = tier == currentTier
-                Text(
-                    "${tier.emoji} ${tier.label}",
-                    modifier   = Modifier.weight(w),
-                    fontSize   = 8.sp,
-                    color      = if (isActive) Color(tier.colorHex) else Slate500,
-                    fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
-                    maxLines   = 1
-                )
+                val isActive  = tier == currentTier
+                val tierColor = if (isActive) Color(tier.colorHex) else Slate500
+                Row(
+                    modifier          = Modifier.weight(w),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector        = tierImageVector(tier),
+                        contentDescription = null,
+                        tint               = tierColor,
+                        modifier           = Modifier.size(7.dp)
+                    )
+                    Spacer(Modifier.width(2.dp))
+                    Text(
+                        tier.label,
+                        fontSize   = 7.sp,
+                        color      = tierColor,
+                        fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
+                        maxLines   = 1
+                    )
+                }
             }
         }
     }
@@ -1082,15 +1113,11 @@ internal fun TierScaleBar(currentScore: Int) {
 internal data class TierNudge(val text: String, val nudgeColor: Color)
 
 internal fun nextTierNudge(score: Int): TierNudge = when {
-    score >= 85 -> TierNudge("You're at peak wellness 🌟", Color(WellnessTier.MINDFUL.colorHex))
-    score >= 70 -> TierNudge("${85 - score} pts to ${WellnessTier.MINDFUL.emoji} Mindful",
-        Color(WellnessTier.MINDFUL.colorHex))
-    score >= 50 -> TierNudge("${70 - score} pts to ${WellnessTier.BALANCED.emoji} Balanced",
-        Color(WellnessTier.BALANCED.colorHex))
-    score >= 30 -> TierNudge("${50 - score} pts to ${WellnessTier.DRIFTING.emoji} Drifting",
-        Color(WellnessTier.DRIFTING.colorHex))
-    else        -> TierNudge("${30 - score} pts to ${WellnessTier.HEAVY_USE.emoji} Heavy Use",
-        Color(WellnessTier.HEAVY_USE.colorHex))
+    score >= 85 -> TierNudge("You're at peak wellness", Color(WellnessTier.MINDFUL.colorHex))
+    score >= 70 -> TierNudge("${85 - score} pts to Mindful",    Color(WellnessTier.MINDFUL.colorHex))
+    score >= 50 -> TierNudge("${70 - score} pts to Balanced",   Color(WellnessTier.BALANCED.colorHex))
+    score >= 30 -> TierNudge("${50 - score} pts to Drifting",   Color(WellnessTier.DRIFTING.colorHex))
+    else        -> TierNudge("${30 - score} pts to Heavy Use",  Color(WellnessTier.HEAVY_USE.colorHex))
 }
 
 internal fun tierRange(tier: WellnessTier): String = when (tier) {

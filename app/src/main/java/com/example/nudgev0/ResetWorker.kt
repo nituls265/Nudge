@@ -27,7 +27,7 @@ class ResetWorker(
             val dbScrollDay = repo.scrollDay(yesterday)
             val scrollCount = dbScrollDay?.count
                 ?: prefs.getInt("CURRENT_SCROLL_COUNT", 0)
-            if (dbScrollDay == null && scrollCount > 0) {
+            if (dbScrollDay == null) {
                 repo.upsertScrollDay(ScrollDay(yesterday, scrollCount))
             }
             AnalyticsHelper.logDailySummary(scrollCount)

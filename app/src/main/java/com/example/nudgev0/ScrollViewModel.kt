@@ -391,8 +391,9 @@ class ScrollViewModel(
     }
 
     // ── Wellness backfill ─────────────────────────────────────────────────────
-    // Runs once on startup. If ResetWorker was delayed (Doze, battery optimisation,
-    // app not open at midnight), any past day with scroll data but no wellness row
+    // Runs once on startup. If ResetWorker was delayed or skipped entirely (Doze,
+    // battery optimisation, device powered off, app not open at midnight), any past
+    // day with no wellness row — including zero-usage days with no ScrollDay row —
     // gets its score computed retroactively from the DB.
 
     private suspend fun backfillMissingWellnessScores() {
@@ -401,16 +402,22 @@ class ScrollViewModel(
 
         try {
             val scrollDays   = repo.scrollHistorySince(thirtyDaysBack).firstOrNull()
-                               ?: return
+                               ?: emptyList()
+            val scrollByDate = scrollDays.associateBy { it.date }
             val wellnessDates = repo.wellnessHistorySince(thirtyDaysBack).firstOrNull()
                                ?.map { it.date }?.toSet() ?: emptySet()
 
+            // Walk every date in the window, not just dates with an existing ScrollDay
+            // row — a day with zero phone usage never gets one, but still needs a score.
+            val allDates = generateSequence(thirtyDaysBack) { DayBoundary.shift(it, 1) }
+                .takeWhile { it <= today }
+
             // Only backfill past days (not today — live score handles today)
-            val missing = scrollDays.filter { it.date != today && it.date !in wellnessDates }
+            val missing = allDates.filter { it != today && it !in wellnessDates }.toList()
             if (missing.isEmpty()) return
 
-            for (scrollDay in missing) {
-                val date = scrollDay.date
+            for (date in missing) {
+                val scrollCount = scrollByDate[date]?.count ?: 0
 
                 // Date after this day (needed for the exclusive-end app-scroll query)
                 val nextDate = DayBoundary.shift(date, 1)
@@ -433,7 +440,7 @@ class ScrollViewModel(
                 val sevenDayAvg = if (prior.size < 3) 0f else prior.average().toFloat()
 
                 val score = WellnessCalculator.calculate(
-                    todayScrolls      = scrollDay.count,
+                    todayScrolls      = scrollCount,
                     sevenDayAvg       = sevenDayAvg,
                     unlockCount       = unlockDay?.count ?: 0,
                     avgSessionMin     = unlockDay?.avgSessionMin ?: 0f,

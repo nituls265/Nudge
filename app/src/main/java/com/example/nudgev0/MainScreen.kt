@@ -1044,7 +1044,7 @@ internal fun WellnessTrendChart(
 // ── TierScaleBar ──────────────────────────────────────────────────────────────
 
 @Composable
-internal fun TierScaleBar(currentScore: Int) {
+internal fun TierScaleBar(currentScore: Int, averageScore: Int? = null) {
     val currentTier = WellnessTier.from(currentScore)
     val tierColor   = Color(currentTier.colorHex)
     val segments    = listOf(
@@ -1076,6 +1076,18 @@ internal fun TierScaleBar(currentScore: Int) {
                 label         = "tier_dot"
             )
             Canvas(modifier = Modifier.fillMaxSize()) {
+                // Average marker drawn first so today's dot sits on top of it
+                // when the two are close together.
+                if (averageScore != null) {
+                    val ax = (size.width * (averageScore.coerceIn(0, 100) / 100f))
+                        .coerceIn(6.dp.toPx(), size.width - 6.dp.toPx())
+                    drawCircle(
+                        color  = Slate400,
+                        radius = 4.dp.toPx(),
+                        center = Offset(ax, size.height / 2f),
+                        style  = Stroke(1.5.dp.toPx())
+                    )
+                }
                 val cx = (size.width * animX).coerceIn(6.dp.toPx(), size.width - 6.dp.toPx())
                 val cy = size.height / 2f
                 drawCircle(Color.White, 7.dp.toPx(), Offset(cx, cy))

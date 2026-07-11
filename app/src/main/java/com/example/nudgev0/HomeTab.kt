@@ -44,6 +44,8 @@ fun HomeTab(vm: ScrollViewModel, onSettingsClick: () -> Unit) {
     val wellnessScore    by vm.wellnessScore.collectAsState()
     val scoreDelta       by vm.scoreDelta.collectAsState()
     val scoreTrendLabel  by vm.scoreTrendLabel.collectAsState()
+    val overallAverage   by vm.overallAverage.collectAsState()
+    val overallDelta     by vm.overallDelta.collectAsState()
     val totalScrollCount by vm.totalScrollCount.collectAsState()
     val scrollCount      by vm.scrollCount.collectAsState()
     val laptopCount      by vm.laptopCount.collectAsState()
@@ -78,10 +80,19 @@ fun HomeTab(vm: ScrollViewModel, onSettingsClick: () -> Unit) {
             CalibrationRingHero(daysRemaining = calibrationDaysRemaining)
         } else {
             ScoreRingHero(
-                score      = wellnessScore,
-                delta      = scoreDelta,
-                trendLabel = scoreTrendLabel
+                score          = wellnessScore,
+                delta          = scoreDelta,
+                trendLabel     = scoreTrendLabel,
+                overallAverage = overallAverage,
+                overallDelta   = overallDelta
             )
+        }
+
+        // ── Today vs. 30-day average — where today's dot sits against the
+        // slow-moving baseline it's meant to nudge up. ─────────────────────────
+        if (!isCalibrating && overallAverage != null) {
+            Spacer(Modifier.height(16.dp))
+            TierScaleBar(currentScore = wellnessScore.total, averageScore = overallAverage)
         }
 
         Spacer(Modifier.height(24.dp))
@@ -118,7 +129,9 @@ fun HomeTab(vm: ScrollViewModel, onSettingsClick: () -> Unit) {
 private fun ScoreRingHero(
     score: WellnessScore,
     delta: Int?,
-    trendLabel: String
+    trendLabel: String,
+    overallAverage: Int? = null,
+    overallDelta: Int? = null
 ) {
     val tierColor = Color(score.tier.colorHex)
 
@@ -219,6 +232,30 @@ private fun ScoreRingHero(
                 style = MaterialTheme.typography.labelSmall,
                 color = Slate400
             )
+        }
+
+        // ── Today vs. 30-day average — quiet by design. Today's score above
+        // is the headline; this is just the context for why it matters. ──────
+        if (overallAverage != null && overallDelta != null) {
+            Spacer(Modifier.height(2.dp))
+            val aboveAvg    = overallDelta >= 0
+            val deltaColor  = if (aboveAvg) Green else Red
+            Row(
+                verticalAlignment     = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(3.dp)
+            ) {
+                Text(
+                    if (aboveAvg) "+$overallDelta" else "$overallDelta",
+                    style      = MaterialTheme.typography.labelSmall,
+                    color      = deltaColor,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    "${if (aboveAvg) "above" else "below"} your 30-day avg ($overallAverage)",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Slate500
+                )
+            }
         }
 
         Spacer(Modifier.height(8.dp))

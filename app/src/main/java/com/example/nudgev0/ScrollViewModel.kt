@@ -333,6 +333,29 @@ class ScrollViewModel(
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
 
+    /**
+     * 30-day rolling average of past daily wellness scores (today excluded) — the
+     * slow, steady baseline today's live score is nudging up or down. Null until
+     * at least 3 real past days exist in the DB, mirroring the baseline guard used
+     * by sevenDayScrollAvg / scoreTrendLabel.
+     */
+    val overallAverage: StateFlow<Int?> = repo.wellnessHistorySince(DayBoundary.daysAgo(30))
+        .map { dbDays ->
+            val today = DayBoundary.today()
+            val pastScores = dbDays.filter { it.date != today && it.score >= 0 }.map { it.score }
+            if (pastScores.size < 3) null else pastScores.average().toInt()
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    /**
+     * How many points today's live score currently sits above (or below) the
+     * 30-day average — this, not the average itself, is the number meant to
+     * motivate: today is what moves it.
+     */
+    val overallDelta: StateFlow<Int?> = combine(wellnessScore, overallAverage) { live, avg ->
+        avg?.let { live.total - it }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private fun isSystemPackage(pkg: String): Boolean {

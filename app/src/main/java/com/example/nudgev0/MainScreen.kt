@@ -18,6 +18,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -37,6 +38,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -119,9 +121,14 @@ fun MainScreen(factory: ScrollViewModelFactory) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
-            // Disable over-scroll glow — it conflicts with charts that have
-            // their own horizontal scroll inside the History tab.
-            beyondViewportPageCount = 0
+            beyondViewportPageCount = 0,
+            // Lower threshold so a short flick (~20% of page width) is enough
+            // to snap to the next tab — the default 50% is too stiff when
+            // swiping from inside a vertically-scrollable column.
+            flingBehavior = PagerDefaults.flingBehavior(
+                state = pagerState,
+                snapPositionalThreshold = 0.2f
+            )
         ) { page ->
             when (page) {
                 0    -> HomeTab(vm = vm,    onSettingsClick = { showSettings = true })
@@ -712,8 +719,13 @@ internal fun BarColumn(
     }
     val ratio    = day.count.toFloat() / maxCount
     val barH     = if (day.count == 0) 0.dp else (140 * ratio).dp.coerceAtLeast(4.dp)
-    val isHigh   = isScrollsTab && day.count > 400
-    val barColor = (if (isHigh) Red else accentColor).copy(alpha = alpha)
+    // Scroll intensity gradient: green (low) → orange (moderate) → red (500+/day),
+    // instead of a flat colour so bars still convey "how much", not just "over/under".
+    val scrollIntensityColor = run {
+        val t = (day.count / 500f).coerceIn(0f, 1f)
+        if (t <= 0.5f) lerp(Green, Orange, t / 0.5f) else lerp(Orange, Red, (t - 0.5f) / 0.5f)
+    }
+    val barColor = (if (isScrollsTab) scrollIntensityColor else accentColor).copy(alpha = alpha)
     val dayLabel = when (timeRange) {
         90   -> if (index % 2 == 0) "W${index + 1}" else ""
         30   -> if (index % 5 == 0) "${index + 1}" else ""

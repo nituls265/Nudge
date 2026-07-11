@@ -302,18 +302,6 @@ class ScrollViewModel(
     }
 
     /**
-     * How many points today's score is up or down vs yesterday.
-     * Null until at least one full previous day exists in the DB.
-     */
-    val scoreDelta: StateFlow<Int?> = recentWellnessHistory.map { history ->
-        val todayStr = DayBoundary.today()
-        val yestStr  = DayBoundary.daysAgo(1)
-        val todayPts = history.find { it.date == todayStr }?.score?.takeIf { it >= 0 }
-        val yestPts  = history.find { it.date == yestStr  }?.score?.takeIf { it >= 0 }
-        if (todayPts != null && yestPts != null) todayPts - yestPts else null
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
-
-    /**
      * "Best in X days" or "2nd best this week" — empty string when not noteworthy
      * or when there are fewer than 2 past days of data to compare against.
      */
@@ -327,8 +315,8 @@ class ScrollViewModel(
         if (pastScores.size < 2) return@map ""   // need ≥ 2 past days to be meaningful
         val beaten = pastScores.count { todayPts > it }
         when {
-            beaten == pastScores.size     -> "📈 Best in ${pastScores.size + 1} days"
-            beaten >= pastScores.size - 1 -> "📊 2nd best this week"
+            beaten == pastScores.size     -> "Best in ${pastScores.size + 1} days"
+            beaten >= pastScores.size - 1 -> "2nd best this week"
             else                          -> ""
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")

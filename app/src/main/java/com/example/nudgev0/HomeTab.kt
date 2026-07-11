@@ -10,8 +10,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.material.icons.outlined.BarChart
+import androidx.compose.material.icons.outlined.TrendingUp
 import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -42,7 +42,6 @@ fun HomeTab(vm: ScrollViewModel, onSettingsClick: () -> Unit) {
     // 5 s with no subscribers, so switching to the History tab incurs no
     // battery cost for data this screen no longer needs.
     val wellnessScore    by vm.wellnessScore.collectAsState()
-    val scoreDelta       by vm.scoreDelta.collectAsState()
     val scoreTrendLabel  by vm.scoreTrendLabel.collectAsState()
     val overallAverage   by vm.overallAverage.collectAsState()
     val overallDelta     by vm.overallDelta.collectAsState()
@@ -81,7 +80,6 @@ fun HomeTab(vm: ScrollViewModel, onSettingsClick: () -> Unit) {
         } else {
             ScoreRingHero(
                 score          = wellnessScore,
-                delta          = scoreDelta,
                 trendLabel     = scoreTrendLabel,
                 overallAverage = overallAverage,
                 overallDelta   = overallDelta
@@ -128,7 +126,6 @@ fun HomeTab(vm: ScrollViewModel, onSettingsClick: () -> Unit) {
 @Composable
 private fun ScoreRingHero(
     score: WellnessScore,
-    delta: Int?,
     trendLabel: String,
     overallAverage: Int? = null,
     overallDelta: Int? = null
@@ -189,78 +186,49 @@ private fun ScoreRingHero(
 
         Spacer(Modifier.height(14.dp))
 
-        // ── Tier label ────────────────────────────────────────────────────────
-        Text(
-            score.tier.label,
-            style      = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.ExtraBold,
-            color      = tierColor
-        )
-
-        Spacer(Modifier.height(6.dp))
-
-        // ── Delta vs yesterday ────────────────────────────────────────────────
-        // Only shown once we have at least one full prior day in the DB
-        if (delta != null) {
-            val isPositive = delta >= 0
-            val deltaColor = if (isPositive) Green else Red
-            Row(
-                verticalAlignment     = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(3.dp)
-            ) {
-                Icon(
-                    imageVector        = if (isPositive) Icons.Outlined.ArrowUpward
-                                        else Icons.Outlined.ArrowUpward,
-                    contentDescription = null,
-                    tint               = deltaColor,
-                    modifier           = Modifier.size(13.dp)
-                )
-                Text(
-                    if (isPositive) "+$delta vs yesterday" else "$delta vs yesterday",
-                    style      = MaterialTheme.typography.labelMedium,
-                    color      = deltaColor,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-        }
-
-        // ── Trend label — "Best in X days" etc. ──────────────────────────────
-        if (trendLabel.isNotEmpty()) {
-            Spacer(Modifier.height(2.dp))
+        // ── Tier label + "Best in X days" badge ──────────────────────────────
+        // The badge is a bonus, not a message competing for the same reading
+        // priority as the tier or the nudge below — so it rides inline as a
+        // small pill instead of claiming its own line.
+        Row(
+            verticalAlignment     = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
             Text(
-                trendLabel,
-                style = MaterialTheme.typography.labelSmall,
-                color = Slate400
+                score.tier.label,
+                style      = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.ExtraBold,
+                color      = tierColor
             )
-        }
-
-        // ── Today vs. 30-day average — quiet by design. Today's score above
-        // is the headline; this is just the context for why it matters. ──────
-        if (overallAverage != null && overallDelta != null) {
-            Spacer(Modifier.height(2.dp))
-            val aboveAvg    = overallDelta >= 0
-            val deltaColor  = if (aboveAvg) Green else Red
-            Row(
-                verticalAlignment     = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(3.dp)
-            ) {
-                Text(
-                    if (aboveAvg) "+$overallDelta" else "$overallDelta",
-                    style      = MaterialTheme.typography.labelSmall,
-                    color      = deltaColor,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    "${if (aboveAvg) "above" else "below"} your 30-day avg ($overallAverage)",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Slate500
-                )
+            if (trendLabel.isNotEmpty()) {
+                Row(
+                    verticalAlignment     = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                    modifier = Modifier
+                        .background(Slate800, RoundedCornerShape(20.dp))
+                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                ) {
+                    Icon(
+                        imageVector        = Icons.Outlined.TrendingUp,
+                        contentDescription = null,
+                        tint               = Slate400,
+                        modifier           = Modifier.size(11.dp)
+                    )
+                    Text(
+                        trendLabel,
+                        style      = MaterialTheme.typography.labelSmall,
+                        color      = Slate400,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             }
         }
 
         Spacer(Modifier.height(8.dp))
 
-        // ── Next-tier nudge ───────────────────────────────────────────────────
+        // ── Next-tier nudge — the one thing to actually read: what to do
+        // today. Bold and tier-coloured so it's the single point of colour
+        // emphasis in this block. ─────────────────────────────────────────────
         val nudge = nextTierNudge(score.total)
         Text(
             nudge.text,
@@ -269,6 +237,19 @@ private fun ScoreRingHero(
             fontWeight = FontWeight.Bold,
             textAlign  = TextAlign.Center
         )
+
+        // ── Today vs. 30-day average — quiet supporting context, one muted
+        // colour for the whole line so it never competes with the nudge. ────
+        if (overallAverage != null && overallDelta != null) {
+            Spacer(Modifier.height(4.dp))
+            val aboveAvg = overallDelta >= 0
+            val signed   = if (aboveAvg) "+$overallDelta" else "$overallDelta"
+            Text(
+                "$signed ${if (aboveAvg) "above" else "below"} your 30-day avg ($overallAverage)",
+                style = MaterialTheme.typography.labelSmall,
+                color = Slate500
+            )
+        }
     }
 }
 

@@ -117,6 +117,12 @@ object WellnessCalculator {
      * @param firstUnlockMs     epoch ms of first unlock; 0 if none
      * @param lastUnlockMs      epoch ms of last unlock; 0 if none
      * @param topApps           top scroll sources (pkg → count), sorted descending
+     * @param previousDayLastUnlockMs epoch ms of the PREVIOUS day's last unlock; 0 if
+     *   unknown (e.g. first tracked day). Used to measure the overnight gap for the
+     *   morning-hygiene component instead of the literal wall-clock hour.
+     * @param personalAvgFirstUnlockMinute the user's own rolling-average first-unlock
+     *   time, as minutes since midnight (e.g. 6:15 AM = 375); null if not enough
+     *   history yet. Used to reward a consistent daily rhythm — see [averageFirstUnlockMinute].
      */
     fun calculate(
         todayScrolls: Int,
@@ -126,7 +132,9 @@ object WellnessCalculator {
         longestSessionMin: Int,
         firstUnlockMs: Long,
         lastUnlockMs: Long,
-        topApps: List<Pair<String, Int>>
+        topApps: List<Pair<String, Int>>,
+        previousDayLastUnlockMs: Long = 0L,
+        personalAvgFirstUnlockMinute: Int? = null
     ): WellnessScore {
 
         // ── A: Scroll Volume (0–30) ───────────────────────────────────────────
@@ -174,9 +182,6 @@ object WellnessCalculator {
         val lastHour = if (lastUnlockMs > 0L)
             Calendar.getInstance().apply { timeInMillis = lastUnlockMs }.get(Calendar.HOUR_OF_DAY)
         else -1
-        val firstHour = if (firstUnlockMs > 0L)
-            Calendar.getInstance().apply { timeInMillis = firstUnlockMs }.get(Calendar.HOUR_OF_DAY)
-        else -1
 
         // Graduated bedtime hygiene:
         //   6–21  (6 AM – 9:59 PM) → full 10 pts  (healthy window)
@@ -189,9 +194,52 @@ object WellnessCalculator {
             lastHour in 22..23   ->  5
             else                 ->  0   // 0–5 AM (after midnight)
         }
-        // First unlock at or after 7 AM → not checking phone right after waking
-        val morningPts = if (firstHour < 0 || firstHour >= 7) 10 else 0
-        val timeHygiene = bedtimePts + morningPts
+
+        // Morning hygiene is two independent 0–10-split signals, not one:
+        //   • GAP (0–6): how long the phone went untouched between yesterday's last
+        //     unlock and today's first — a rest/sleep-duration proxy. A wall-clock
+        //     cutoff can't tell "checked at 6 AM after sleeping since 9 PM" (a long
+        //     healthy gap) apart from "checked at 6 AM after being up until 5 AM"
+        //     (no gap at all) — both have the same first-unlock hour. It also can't
+        //     tell a 6 AM unlock might be to start a morning meditation session, not
+        //     doom-scrolling. Measuring the gap scores the actual rest, regardless of
+        //     what hour it happens to start or end at.
+        //   • CONSISTENCY (0–4): how close today's first unlock is to the user's OWN
+        //     rolling-average first-unlock time — a routine/rhythm proxy, independent
+        //     of rest. Only checking EARLIER than your personal norm costs points;
+        //     checking later (sleeping in, or just going longer without the phone)
+        //     is always fine or better, never penalised.
+        // Each half degrades gracefully to full credit on its own when the data it
+        // needs isn't available yet, rather than one shared all-or-nothing gate.
+        val gapPts = when {
+            firstUnlockMs <= 0L           -> 6   // no unlock yet today — not penalised
+            previousDayLastUnlockMs <= 0L -> 6   // no prior-day data — don't penalise
+            else -> {
+                val gapHours = (firstUnlockMs - previousDayLastUnlockMs) / 3_600_000f
+                when {
+                    gapHours >= 8f -> 6
+                    gapHours >= 6f -> 4
+                    gapHours >= 4f -> 2
+                    else           -> 0
+                }
+            }
+        }
+        val consistencyPts = when {
+            firstUnlockMs <= 0L                  -> 4   // no unlock yet today — not penalised
+            personalAvgFirstUnlockMinute == null -> 4   // baseline still calibrating — don't penalise
+            else -> {
+                val todayMinute = Calendar.getInstance().apply { timeInMillis = firstUnlockMs }
+                    .let { it.get(Calendar.HOUR_OF_DAY) * 60 + it.get(Calendar.MINUTE) }
+                val deviation = todayMinute - personalAvgFirstUnlockMinute   // negative = earlier than usual
+                when {
+                    deviation >= -15 -> 4   // on time, or later — always fine
+                    deviation >= -60 -> 2   // somewhat earlier than usual
+                    else              -> 0   // much earlier than usual
+                }
+            }
+        }
+        val morningPts   = gapPts + consistencyPts
+        val timeHygiene  = bedtimePts + morningPts
 
         // ── E: App Quality (0–15) ─────────────────────────────────────────────
         // Judge based on the single top scroll source.
@@ -223,5 +271,25 @@ object WellnessCalculator {
             todayScrolls     = todayScrolls,
             baselineScrolls  = sevenDayAvg.toInt()
         )
+    }
+
+    /**
+     * The user's personal baseline first-unlock time, as minutes since midnight —
+     * feeds [calculate]'s `personalAvgFirstUnlockMinute` param.
+     *
+     * @param firstUnlockTimestamps epoch-ms first-unlock times from PAST days only
+     *   (caller excludes the day being scored and any zero-unlock days — a day with
+     *   no unlock has no time-of-day to average in, and including it as midnight
+     *   would corrupt the baseline).
+     * @return null if fewer than 3 data points — not enough history to be meaningful,
+     *   so callers should treat that as "still calibrating" and not penalise.
+     */
+    fun averageFirstUnlockMinute(firstUnlockTimestamps: List<Long>): Int? {
+        if (firstUnlockTimestamps.size < 3) return null
+        val minutesOfDay = firstUnlockTimestamps.map {
+            Calendar.getInstance().apply { timeInMillis = it }
+                .let { c -> c.get(Calendar.HOUR_OF_DAY) * 60 + c.get(Calendar.MINUTE) }
+        }
+        return minutesOfDay.average().toInt()
     }
 }

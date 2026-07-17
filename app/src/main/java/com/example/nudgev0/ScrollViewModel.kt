@@ -26,7 +26,24 @@ class ScrollViewModel(
         // Backfill wellness scores for any past day that has scroll data but no wellness entry.
         // Handles the case where ResetWorker was delayed by Doze / battery optimisation.
         viewModelScope.launch(Dispatchers.IO) { backfillMissingWellnessScores() }
+        // Yesterday's last-unlock time and the personal first-unlock baseline are both
+        // fixed for the whole day (nothing before today changes intraday), so one-shot
+        // fetches are enough — no need for reactive flows.
+        viewModelScope.launch(Dispatchers.IO) {
+            _previousDayLastUnlockMs.value = repo.unlockDay(DayBoundary.daysAgo(1))?.lastUnlockMs ?: 0L
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            val today = DayBoundary.today()
+            val pastFirstUnlocks = repo.unlockHistorySince(DayBoundary.daysAgo(14)).firstOrNull()
+                ?.filter { it.date != today && it.firstUnlockMs > 0L }
+                ?.map { it.firstUnlockMs }
+                ?: emptyList()
+            _personalAvgFirstUnlockMinute.value = WellnessCalculator.averageFirstUnlockMinute(pastFirstUnlocks)
+        }
     }
+
+    private val _previousDayLastUnlockMs = MutableStateFlow(0L)
+    private val _personalAvgFirstUnlockMinute = MutableStateFlow<Int?>(null)
 
     // ── Live state from the service ───────────────────────────────────────────
 
@@ -204,7 +221,12 @@ class ScrollViewModel(
         longestSessionMin
     ) { a, b, c, d, e -> WnTuple5(a, b, c, d, e) }
         .combine(firstUnlockMs) { t, first -> WnTuple6(t.a, t.b, t.c, t.d, t.e, first) }
-        .combine(lastUnlockMs)  { t, last  ->
+        .combine(lastUnlockMs)  { t, last  -> WnTuple7(t.a, t.b, t.c, t.d, t.e, t.f, last) }
+        .combine(
+            combine(_previousDayLastUnlockMs, _personalAvgFirstUnlockMinute) { prevLast, avgMinute ->
+                prevLast to avgMinute
+            }
+        ) { t, (prevLast, avgMinute) ->
             val liveTopApps = MyAccessibilityService.appScrollCounts.value
                 .entries
                 .filter { !isSystemPackage(it.key) }
@@ -212,14 +234,16 @@ class ScrollViewModel(
                 .map { it.key to it.value }
 
             WellnessCalculator.calculate(
-                todayScrolls      = t.a,
-                sevenDayAvg       = t.b,
-                unlockCount       = t.c,
-                avgSessionMin     = t.d,
-                longestSessionMin = t.e,
-                firstUnlockMs     = t.f,
-                lastUnlockMs      = last,
-                topApps           = liveTopApps
+                todayScrolls                  = t.a,
+                sevenDayAvg                   = t.b,
+                unlockCount                   = t.c,
+                avgSessionMin                 = t.d,
+                longestSessionMin             = t.e,
+                firstUnlockMs                 = t.f,
+                lastUnlockMs                  = t.g,
+                topApps                       = liveTopApps,
+                previousDayLastUnlockMs       = prevLast,
+                personalAvgFirstUnlockMinute  = avgMinute
             )
         }
         .stateIn(
@@ -434,6 +458,16 @@ class ScrollViewModel(
                 val nextDate = DayBoundary.shift(date, 1)
 
                 val unlockDay = repo.unlockDay(date)
+                val prevDayLastUnlockMs = repo.unlockDay(DayBoundary.shift(date, -1))?.lastUnlockMs ?: 0L
+
+                // Personal first-unlock baseline: 14 days before this date, excluding
+                // this date itself and any zero-unlock days.
+                val baselineHistory = repo.unlockHistorySince(DayBoundary.shift(date, -15))
+                    .firstOrNull() ?: emptyList()
+                val pastFirstUnlocks = baselineHistory
+                    .filter { it.date != date && it.firstUnlockMs > 0L }
+                    .map { it.firstUnlockMs }
+                val avgFirstUnlockMinute = WellnessCalculator.averageFirstUnlockMinute(pastFirstUnlocks)
 
                 val appTotals = repo.appTotalsBetween(date, nextDate)
                     .firstOrNull() ?: emptyList()
@@ -451,14 +485,16 @@ class ScrollViewModel(
                 val sevenDayAvg = if (prior.size < 3) 0f else prior.average().toFloat()
 
                 val score = WellnessCalculator.calculate(
-                    todayScrolls      = scrollCount,
-                    sevenDayAvg       = sevenDayAvg,
-                    unlockCount       = unlockDay?.count ?: 0,
-                    avgSessionMin     = unlockDay?.avgSessionMin ?: 0f,
-                    longestSessionMin = unlockDay?.longestSessionMin ?: 0,
-                    firstUnlockMs     = unlockDay?.firstUnlockMs ?: 0L,
-                    lastUnlockMs      = unlockDay?.lastUnlockMs ?: 0L,
-                    topApps           = topApps
+                    todayScrolls                  = scrollCount,
+                    sevenDayAvg                   = sevenDayAvg,
+                    unlockCount                   = unlockDay?.count ?: 0,
+                    avgSessionMin                 = unlockDay?.avgSessionMin ?: 0f,
+                    longestSessionMin             = unlockDay?.longestSessionMin ?: 0,
+                    firstUnlockMs                 = unlockDay?.firstUnlockMs ?: 0L,
+                    lastUnlockMs                  = unlockDay?.lastUnlockMs ?: 0L,
+                    topApps                       = topApps,
+                    previousDayLastUnlockMs       = prevDayLastUnlockMs,
+                    personalAvgFirstUnlockMinute  = avgFirstUnlockMinute
                 )
 
                 repo.upsertWellnessDay(
@@ -555,6 +591,9 @@ class ScrollViewModel(
 
 private data class WnTuple5<A, B, C, D, E>(val a: A, val b: B, val c: C, val d: D, val e: E)
 private data class WnTuple6<A, B, C, D, E, F>(val a: A, val b: B, val c: C, val d: D, val e: E, val f: F)
+private data class WnTuple7<A, B, C, D, E, F, G>(
+    val a: A, val b: B, val c: C, val d: D, val e: E, val f: F, val g: G
+)
 
 // ── Wellness history point ────────────────────────────────────────────────────
 

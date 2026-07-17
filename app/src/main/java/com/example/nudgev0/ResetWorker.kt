@@ -121,15 +121,31 @@ class ResetWorker(
                 val sevenDayAvg: Float = if (pastCounts.isEmpty()) 0f
                                          else pastCounts.average().toFloat()
 
+                // Day before yesterday's last unlock — the start of the overnight
+                // gap that yesterday's morning-hygiene component measures.
+                val dayBeforeYesterday = DayBoundary.daysAgo(2)
+                val prevDayLastUnlockMs = repo.unlockDay(dayBeforeYesterday)?.lastUnlockMs ?: 0L
+
+                // Personal first-unlock baseline: 14 days before yesterday, excluding
+                // yesterday itself and any zero-unlock days.
+                val baselineHistory = repo.unlockHistorySince(DayBoundary.daysAgo(15))
+                    .firstOrNull() ?: emptyList()
+                val pastFirstUnlocks = baselineHistory
+                    .filter { it.date != yesterday && it.firstUnlockMs > 0L }
+                    .map { it.firstUnlockMs }
+                val avgFirstUnlockMinute = WellnessCalculator.averageFirstUnlockMinute(pastFirstUnlocks)
+
                 val score = WellnessCalculator.calculate(
-                    todayScrolls      = scrollCount,
-                    sevenDayAvg       = sevenDayAvg,
-                    unlockCount       = unlockCount,
-                    avgSessionMin     = avgSessionMin,
-                    longestSessionMin = longestSession,
-                    firstUnlockMs     = firstUnlockMs,
-                    lastUnlockMs      = lastUnlockMs,
-                    topApps           = topApps
+                    todayScrolls                  = scrollCount,
+                    sevenDayAvg                   = sevenDayAvg,
+                    unlockCount                   = unlockCount,
+                    avgSessionMin                 = avgSessionMin,
+                    longestSessionMin             = longestSession,
+                    firstUnlockMs                 = firstUnlockMs,
+                    lastUnlockMs                  = lastUnlockMs,
+                    topApps                       = topApps,
+                    previousDayLastUnlockMs       = prevDayLastUnlockMs,
+                    personalAvgFirstUnlockMinute  = avgFirstUnlockMinute
                 )
                 repo.upsertWellnessDay(
                     WellnessDay(

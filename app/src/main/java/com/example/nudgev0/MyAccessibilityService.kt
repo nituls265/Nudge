@@ -541,6 +541,11 @@ class MyAccessibilityService : AccessibilityService() {
         }
         if (event.eventType != AccessibilityEvent.TYPE_VIEW_SCROLLED) return
 
+        // Never count scrolling inside Nudge itself — e.g. the bottom-nav
+        // HorizontalPager fires TYPE_VIEW_SCROLLED as it animates between tabs,
+        // which would otherwise log a tab switch as a doom-scroll.
+        if (packageName == applicationContext.packageName) return
+
         if (packageName.contains("inputmethod") || packageName.contains("keyboard") || packageName.contains("gboard")) return
         if (now - lastWindowStateChangeTime < 500) return
         if (now - lastTextChangeTime < 500) return

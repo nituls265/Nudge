@@ -6,7 +6,9 @@ A draggable floating bubble shows the live count on top of whatever app you're u
 
 > Status: pre-release (v0). Built as a personal project — package id is still `com.example.nudgev0`.
 >
-> Last documented: 2026-05-05
+> No proprietary Google SDKs (Firebase, Play Services, etc.) — F-Droid compatible.
+>
+> Last documented: 2026-07-24
 
 ## Features
 
@@ -16,7 +18,7 @@ A draggable floating bubble shows the live count on top of whatever app you're u
 - **Pause and reset.** Pause the counter when you don't want it tracking, or reset today's count manually. A manual reset saves the current count to history before wiping.
 - **Crash-safe persistence.** Every counted scroll is written immediately to `SharedPreferences` and throttled (≤ once per 2 s) to a Room database, so the count survives the OS killing the service.
 - **Midnight rollover.** Yesterday's tally is locked into the database and the live counter resets at midnight via a `WorkManager` `PeriodicWorkRequest` scheduled from `MainActivity`.
-- **Anonymous analytics.** Daily totals and feature usage are sent to Firebase Analytics.
+- **Anonymous analytics (opt-in).** Daily totals and feature usage are optionally sent to a Supabase project — see [Privacy & telemetry](#privacy--telemetry).
 
 ## Tech stack
 
@@ -24,7 +26,7 @@ A draggable floating bubble shows the live count on top of whatever app you're u
 - Android `AccessibilityService` + `WindowManager` overlay
 - Room (SQLite) for history, SharedPreferences for the live counter and bubble position
 - WorkManager for the daily reset job
-- Firebase Analytics
+- Supabase (Postgres + PostgREST) for opt-in telemetry and laptop-sync — plain HTTPS calls, no SDK
 - Gradle Kotlin DSL, kapt, version catalog (`gradle/libs.versions.toml`)
 - minSdk 24, targetSdk 36, Java 11
 
@@ -42,7 +44,7 @@ MyAccessibilityService  ── StateFlow ──▶  ScrollViewModel ──▶  M
         │
         └── Floating bubble (WindowManager overlay)
 
-Midnight:  ResetWorker ──▶ Room (lock yesterday) + Firebase + wipe prefs
+Midnight:  ResetWorker ──▶ Room (lock yesterday) + Supabase + wipe prefs
 ```
 
 ### Scroll detection (filtering noise out)
@@ -70,7 +72,7 @@ app/src/main/java/com/example/nudgev0/
 ├── MyAccessibilityService.kt    # Scroll detection (7 filters), overlay bubble, SSOT state
 ├── AccessibilityServiceUtils.kt # "Is the service enabled?" helper
 ├── ResetWorker.kt               # Midnight rollover (Room write + analytics + wipe)
-├── AnalyticsHelper.kt           # Firebase Analytics events
+├── AnalyticsHelper.kt           # Product-analytics events (opt-in, Supabase)
 ├── data/ScrollDatabase.kt       # Room DB, ScrollDay entity, ScrollDao
 └── ui/theme/                    # Compose theme (Color, Theme, Type)
 
@@ -91,7 +93,11 @@ The app needs two permissions, both granted by the user from system settings (no
 
 The "Show Bubble" button checks both and routes the user to the right settings screen if either is missing.
 
-## Firebase Analytics events
+## Product-analytics events
+
+Opt-in only (see [Privacy & telemetry](#privacy--telemetry)) — sent to a
+`product_events` table on the same Supabase project as the retention
+telemetry, keyed by the same anonymous install ID.
 
 | Event | When it fires | Params |
 |---|---|---|
@@ -99,6 +105,9 @@ The "Show Bubble" button checks both and routes the user to the right settings s
 | `feature_bubble_toggled` | User taps Show / Hide Bubble | `is_visible: Bool` |
 | `action_pause_toggled` | User taps Pause / Resume | `is_paused: Bool` |
 | `action_manual_reset` | User taps "Reset Today's Data" | none |
+| `scroll_session_snapshot` | App backgrounded (`onStop`), if today's count > 0 | `total_scrolls: Int` |
+| `intervention_triggered` | An intervention overlay fires | `level: Int` |
+| `intervention_response` | User responds to an intervention | `response: "break" \| "ignore"`, `level: Int` |
 
 ## Building
 
@@ -111,48 +120,72 @@ Requirements:
 Steps:
 
 1. Clone the repo and open it in Android Studio.
-2. Add your own `app/google-services.json` from the Firebase console (the file is gitignored).
-3. Let Gradle sync, then run the `app` configuration on a device or emulator running Android 7.0 (API 24) or higher.
-4. On first launch, tap **Show Bubble** and grant the two permissions when prompted.
+2. Let Gradle sync, then run the `dev` flavor's `app` configuration on a device or emulator running Android 7.0 (API 24) or higher. Use the `friend` flavor (`assembleFriendDebug` / `installFriendDebug`) for a build with all cloud features (telemetry + laptop-sync) disabled at the source.
+3. On first launch, tap **Show Bubble** and grant the two permissions when prompted.
 
 ## Privacy & telemetry
 
-Nudge is privacy-first. The on-device scroll/usage tracking **never leaves your
-phone** — it lives in a local Room database and (optionally) syncs only to *your
-own* Firebase project for the laptop-pairing feature.
+Nudge's on-device scroll/usage tracking **never leaves your phone by default**
+— it lives in a local Room database. Two separate features can send data off
+your device, both to the same Supabase project (the developer's, not a
+per-user "bring your own backend" — see below):
 
-There is one optional, **opt-in** piece of telemetry whose only purpose is to
-measure whether people keep using Nudge over time (retention). It is **off by
-default**; a one-time prompt on first launch lets you turn it on, and you can
-turn it off any time under **Settings → Anonymous analytics**.
+1. **Opt-in analytics** (retention + product usage) — off by default.
+2. **Laptop-sync** (the Chrome extension pairing feature) — not gated by the
+   analytics opt-in; it sends data whenever you pair a Sync Code, on any
+   `dev`-flavor build. Use a `friend`-flavor build (see
+   [Building](#building)) if you don't want this feature or any network
+   activity at all — it disables both at the source.
 
-**What is sent (only if you opt in):**
+### Opt-in analytics
 
-- An **anonymous random ID** (a `UUID` generated on your device on first launch,
-  stored locally in DataStore). It is not derived from any hardware or account.
-- **`first_open`** — once, ever: the anonymous ID, a UTC timestamp, the app
-  version, and `platform: "android"`.
-- **`day_active`** — at most once per calendar day you open the app: the
-  anonymous ID, the date (`YYYY-MM-DD`, your device's local date), and the app
-  version.
+A one-time prompt on first launch lets you turn this on, and you can turn it
+off any time under **Settings → Anonymous analytics**. Two kinds of events are
+sent, both keyed to the same anonymous ID:
 
-**What is NEVER sent or even read:** your scroll counts or content, app names,
-unlock/session data, accounts, location, IP-derived identity, and any device or
-advertising identifier (no `ANDROID_ID`, advertising ID, IMEI, MAC, or serial).
-There is no Google Analytics, no third-party tracker for this.
+- **Retention** (`events` table) — `first_open` (once, ever) and `day_active`
+  (at most once per local calendar day): anonymous ID, timestamp/date, app
+  version, platform.
+- **Product usage** (`product_events` table, listed in full in
+  [Product-analytics events](#product-analytics-events)) — aggregate daily/
+  session **scroll counts** (an integer total, not individual scroll events or
+  content), feature-toggle states (bubble/pause), and intervention
+  level/response.
 
-**How it works:** events are queued locally and sent (a thin HTTPS POST) to a
-self-hosted Supabase Postgres table; they work offline and flush when the
-network returns. The destination is configured in
-`app/src/main/java/com/example/nudgev0/telemetry/TelemetryConfig.kt` — if left
-blank, nothing is sent.
+**Still never sent or read, by either stream:** scroll *content*, per-app
+breakdown, unlock/session timing, accounts, location, IP-derived identity, or
+any device/advertising identifier (no `ANDROID_ID`, advertising ID, IMEI, MAC,
+or serial). No Google Analytics, no third-party tracker.
 
-**How to opt out / delete:** toggle **Settings → Anonymous analytics** off. This
-stops all sending **and deletes the local anonymous ID** (a new one is only
-created if you opt in again). Uninstalling or clearing app data also removes it.
+**How to opt out / delete:** toggle **Settings → Anonymous analytics** off.
+This stops both the retention and product-usage sends **and deletes the local
+anonymous ID** (a new one is only created if you opt in again). It does
+**not** affect laptop-sync — that's a separate toggle-less feature, see below.
+Uninstalling or clearing app data also removes the ID.
 
-Server schema, the insert-only Row-Level-Security policy, and the retention /
-DAU-WAU-MAU / stickiness queries live in [`supabase/`](supabase/).
+### Laptop-sync (Chrome extension)
+
+If you pair the Chrome extension with the Sync Code shown under **Settings →
+Chrome Extension Sync**, your laptop's scroll counts — including which
+tracked-site **domains** you scrolled on (e.g. `reddit.com`) — are sent to a
+`sync_state` table on the same Supabase project, keyed by that Sync Code
+rather than the anonymous analytics ID. There is no separate opt-out toggle
+for this in the app; not pairing the extension is the opt-out. A `friend`
+flavor build disables it entirely (the Sync Code never resolves).
+
+### How it works / self-hosting
+
+Events are queued locally and sent as a thin HTTPS POST (no SDK, plain
+`HttpURLConnection`/`fetch`); they work offline and flush when the network
+returns. The destination is configured in
+`app/src/main/java/com/example/nudgev0/telemetry/TelemetryConfig.kt` — if you
+build from source with those values left blank, nothing is sent. **As shipped
+in this repository, those values point at the developer's own Supabase
+project** (not a per-user or self-hosted instance) — anyone building from this
+exact source and opting in sends data there, same as the shipped APK.
+
+Server schema, the insert-only Row-Level-Security policies, and the retention
+/ DAU-WAU-MAU / stickiness queries live in [`supabase/`](supabase/).
 
 ## Roadmap / known gaps
 

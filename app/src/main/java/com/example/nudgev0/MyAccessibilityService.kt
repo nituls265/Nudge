@@ -49,6 +49,7 @@ class MyAccessibilityService : AccessibilityService() {
     private var lastProgrammaticScrollTime = 0L
     private var previousItemCount = -1
     private var lastScrollEventTime = 0L
+    private var lastDiagonalScrollTime = 0L
 
     // ── Hot-path caches (main-thread only) ────────────────────────────────────
     // onAccessibilityEvent runs on the main thread for EVERY scroll event.
@@ -570,6 +571,28 @@ class MyAccessibilityService : AccessibilityService() {
 
             // Purely horizontal = chart scrub / carousel / gallery — never feed scrolling.
             if (event.scrollDeltaX != 0 && event.scrollDeltaY == 0) return
+
+            // Diagonal (both axes move together) = 2D pan/zoom, e.g. pinch-zooming
+            // a document/photo or dragging a map — the focal point shifts in both
+            // directions at once. Real feed scrolling only ever moves one axis.
+            // Excludes the (-1,-1) "delta unsupported" sentinel, which isn't a
+            // real movement and is relied on elsewhere (e.g. launcher swipes).
+            if (event.scrollDeltaX != 0 && event.scrollDeltaY != 0 &&
+                !(event.scrollDeltaX == -1 && event.scrollDeltaY == -1)) {
+                lastDiagonalScrollTime = now
+                return
+            }
+
+            // A pinch/pan gesture's trailing momentum often decays into a final
+            // single-axis delta right as fingers lift, which wouldn't match the
+            // diagonal check above on its own. Suppress anything landing shortly
+            // after a detected diagonal event so that settle motion doesn't
+            // sneak through as a lone "scroll". A slow, deliberate pinch fires
+            // accessibility events much less often than a fast flick — gaps of
+            // over a second between successive diagonal events are normal — so
+            // this window has to be wide enough to bridge those gaps, not just
+            // the quick trailing-momentum case.
+            if (now - lastDiagonalScrollTime < 2000) return
 
             // Absorbed-gesture signature inside a WebView/browser: NO usable delta
             // (-1 is the "unknown" sentinel) AND the page never moved (position 0/0).

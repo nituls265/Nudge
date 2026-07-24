@@ -22,6 +22,9 @@ class ScrollViewModel(
 
     private val appContext = application.applicationContext
 
+    private val _previousDayLastUnlockMs = MutableStateFlow(0L)
+    private val _personalAvgFirstUnlockMinute = MutableStateFlow<Int?>(null)
+
     init {
         // Backfill wellness scores for any past day that has scroll data but no wellness entry.
         // Handles the case where ResetWorker was delayed by Doze / battery optimisation.
@@ -41,9 +44,6 @@ class ScrollViewModel(
             _personalAvgFirstUnlockMinute.value = WellnessCalculator.averageFirstUnlockMinute(pastFirstUnlocks)
         }
     }
-
-    private val _previousDayLastUnlockMs = MutableStateFlow(0L)
-    private val _personalAvgFirstUnlockMinute = MutableStateFlow<Int?>(null)
 
     // ── Live state from the service ───────────────────────────────────────────
 

@@ -1,5 +1,13 @@
 // ─── Nudge Popup ─────────────────────────────────────────────────────────────
-const FIREBASE_DB_URL = 'https://nudgev0-default-rtdb.firebaseio.com';
+const SUPABASE_URL      = 'https://mvfdwgcknmskadhlujgk.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im12ZmR3Z2Nrbm1za2FkaGx1amdrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzODM3NTMsImV4cCI6MjA5Njk1OTc1M30.xN66ohuXKM6EnyYM1dt9-7ctgB29FLXFs8YeH27HqWE';
+
+function supabaseHeaders() {
+  return {
+    'apikey':        SUPABASE_ANON_KEY,
+    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+  };
+}
 
 const linkedView  = document.getElementById('linked-view');
 const setupView   = document.getElementById('setup-view');
@@ -29,10 +37,8 @@ document.getElementById('link-btn').addEventListener('click', async () => {
   const raw = document.getElementById('sync-id-input').value.trim();
   if (!raw) return showError('Please paste your Sync Code from the Nudge app.');
 
-  const today = todayString();
   try {
-    const res = await fetch(`${FIREBASE_DB_URL}/users/${raw}/laptop/${today}.json`);
-    if (!res.ok && res.status !== 404) throw new Error('Could not reach database');
+    await fetchSyncRow(raw, todayString());
 
     await chrome.storage.local.set({ nudgeSyncId: raw });
     hideError();
@@ -61,7 +67,7 @@ document.getElementById('sync-now-btn').addEventListener('click', async () => {
   try {
     await chrome.runtime.sendMessage({ type: 'FORCE_FLUSH' });
     const { nudgeSyncId } = await chrome.storage.local.get(['nudgeSyncId']);
-    if (nudgeSyncId) await fetchFirebaseCount(nudgeSyncId);
+    if (nudgeSyncId) await refreshSyncedCount(nudgeSyncId);
   } finally {
     btn.textContent = 'Sync Now';
     btn.disabled = false;
@@ -73,40 +79,48 @@ async function showLinkedView(syncId) {
   setupView.style.display  = 'none';
   linkedView.style.display = 'block';
 
-  await fetchFirebaseCount(syncId);
+  await refreshSyncedCount(syncId);
   updateDisplay();
 
-  // Refresh Firebase count every 10s, pending every 2s
+  // Refresh Supabase count every 10s, pending every 2s
   if (refreshTimer) clearInterval(refreshTimer);
   let tick = 0;
   refreshTimer = setInterval(async () => {
     tick++;
     updateDisplay();                          // always update pending immediately
-    if (tick % 5 === 0) await fetchFirebaseCount(syncId); // Firebase every 10s
+    if (tick % 5 === 0) await refreshSyncedCount(syncId); // Supabase every 10s
   }, 2000);
 }
 
-// ─── Fetch synced count from Firebase and reconcile with local storage ────────
-// If Firebase has a higher count than our local syncedCounts (e.g. after a
+// ─── Fetch the sync_state row for today ───────────────────────────────────────
+async function fetchSyncRow(syncId, date) {
+  const url = `${SUPABASE_URL}/rest/v1/sync_state?sync_id=eq.${encodeURIComponent(syncId)}&date=eq.${date}&select=laptop_count,laptop_synced_at`;
+  const res = await fetch(url, { headers: supabaseHeaders() });
+  if (!res.ok) throw new Error(`Could not reach Supabase (HTTP ${res.status})`);
+  const rows = await res.json();
+  return rows[0] ?? null;
+}
+
+// ─── Fetch synced count from Supabase and reconcile with local storage ───────
+// If Supabase has a higher count than our local syncedCounts (e.g. after a
 // reinstall that wiped storage), update local so the next flush doesn't
-// overwrite Firebase with a lower number.
-async function fetchFirebaseCount(syncId) {
+// overwrite Supabase with a lower number.
+async function refreshSyncedCount(syncId) {
   const today = todayString();
   try {
-    const res  = await fetch(`${FIREBASE_DB_URL}/users/${syncId}/laptop/${today}.json`);
-    const data = res.ok ? await res.json() : null;
+    const row = await fetchSyncRow(syncId, today);
 
-    if (data?.laptop_count) {
+    if (row?.laptop_count) {
       const { syncedCounts } = await chrome.storage.local.get(['syncedCounts']);
       const localSynced = (syncedCounts ?? {})[today] ?? 0;
-      if (data.laptop_count > localSynced) {
-        const updated = { ...(syncedCounts ?? {}), [today]: data.laptop_count };
+      if (row.laptop_count > localSynced) {
+        const updated = { ...(syncedCounts ?? {}), [today]: row.laptop_count };
         await chrome.storage.local.set({ syncedCounts: updated });
       }
     }
 
-    if (data?.synced_at) {
-      lastSynced.textContent = `Last synced ${timeSince(data.synced_at)}`;
+    if (row?.laptop_synced_at) {
+      lastSynced.textContent = `Last synced ${timeSince(Date.parse(row.laptop_synced_at))}`;
     } else {
       lastSynced.textContent = 'No data yet today';
     }

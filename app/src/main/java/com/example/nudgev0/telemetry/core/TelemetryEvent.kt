@@ -60,6 +60,31 @@ sealed interface TelemetryEvent {
     }
 }
 
+/**
+ * A product-analytics event (feature usage, intervention funnel, etc.) —
+ * distinct from [TelemetryEvent], which is reserved for exactly the two
+ * retention events. Sent to a separate `product_events` table so the
+ * retention pipe's "no behavioural data" invariant stays true.
+ *
+ * [metadataJson] is a pre-built JSON object string (e.g. `{"level":2}`),
+ * embedded raw rather than through [jsonString] since it must stay a nested
+ * object, not a quoted string.
+ */
+data class ProductEvent(
+    val eventType: String,
+    val installId: String,
+    val appVersion: String,
+    val metadataJson: String,
+) {
+    fun toJson(): String =
+        "{" +
+            "\"event_type\":${jsonString(eventType)}," +
+            "\"install_id\":${jsonString(installId)}," +
+            "\"app_version\":${jsonString(appVersion)}," +
+            "\"metadata\":$metadataJson" +
+            "}"
+}
+
 // ── Minimal, dependency-free JSON (so the core pulls in no serialization lib) ──
 
 /**

@@ -42,6 +42,7 @@ class DataStoreTelemetryStorage(context: Context) : TelemetryStorage {
     private val keyFirstOpenSent = booleanPreferencesKey("first_open_sent")
     private val keyLastActive    = stringPreferencesKey("last_active_date")
     private val keyQueue         = stringPreferencesKey("event_queue") // \n-joined JSON objects
+    private val keyProductQueue  = stringPreferencesKey("product_event_queue") // \n-joined JSON objects
 
     override suspend fun isOptedIn() = ds.data.first()[keyOptedIn] ?: false
     override suspend fun setOptedIn(value: Boolean) { ds.edit { it[keyOptedIn] = value } }
@@ -73,6 +74,18 @@ class DataStoreTelemetryStorage(context: Context) : TelemetryStorage {
         }
     }
     override suspend fun clearQueue() { ds.edit { it.remove(keyQueue) } }
+
+    override suspend fun queuedProductEvents(): List<String> {
+        val raw = ds.data.first()[keyProductQueue] ?: return emptyList()
+        return raw.split('\n').filter { it.isNotBlank() }
+    }
+    override suspend fun appendQueuedProductEvent(json: String) {
+        ds.edit {
+            val existing = it[keyProductQueue]
+            it[keyProductQueue] = if (existing.isNullOrEmpty()) json else "$existing\n$json"
+        }
+    }
+    override suspend fun clearProductEventQueue() { ds.edit { it.remove(keyProductQueue) } }
 }
 
 /**
@@ -84,18 +97,24 @@ class HttpUrlTransport(
     private val supabaseUrl: String,
     private val anonKey: String,
 ) : TelemetryTransport {
-    override suspend fun postEvents(jsonArrayBody: String): Boolean = withContext(Dispatchers.IO) {
+    override suspend fun postEvents(jsonArrayBody: String): Boolean =
+        post("events", jsonArrayBody)
+
+    override suspend fun postProductEvents(jsonArrayBody: String): Boolean =
+        post("product_events", jsonArrayBody)
+
+    private suspend fun post(table: String, jsonArrayBody: String): Boolean = withContext(Dispatchers.IO) {
         // Debug-inspection: print the EXACT JSON about to leave the device. Gated to
         // debug builds via BuildConfig.DEBUG, so it is a no-op (and strippable) in
         // release. Placed before the config check so payloads are visible even when
         // no backend is configured yet.
         if (BuildConfig.DEBUG) {
-            Log.d("NudgeTelemetry", "▶ events about to send: $jsonArrayBody")
+            Log.d("NudgeTelemetry", "▶ $table about to send: $jsonArrayBody")
         }
         if (supabaseUrl.isBlank() || anonKey.isBlank()) return@withContext false
         var conn: HttpURLConnection? = null
         try {
-            val url = URL(supabaseUrl.trimEnd('/') + "/rest/v1/events")
+            val url = URL(supabaseUrl.trimEnd('/') + "/rest/v1/$table")
             conn = (url.openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
                 connectTimeout = 10_000

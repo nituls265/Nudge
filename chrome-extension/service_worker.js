@@ -1,17 +1,20 @@
 // ─── Nudge Service Worker ────────────────────────────────────────────────────
-// Batches scroll deltas from content scripts and uploads to Firebase
-// Realtime Database every 5 minutes (or on browser close).
+// Batches scroll deltas from content scripts and uploads to Supabase
+// (public.sync_state, PostgREST) every 5 minutes (or on browser close).
 //
 // Sync strategy:
 //   - Content scripts send SCROLL_DELTA messages as the user scrolls
 //   - We accumulate in chrome.storage.local (survives service worker restarts)
-//   - An alarm fires every 5 min to flush to Firebase
-//   - We write to users/{syncId}/laptop/{date} using PATCH (merge, not overwrite)
-//   - The Android app reads this path and merges with its phone count
+//   - An alarm fires every 5 min to flush to Supabase
+//   - We upsert sync_state(sync_id, date) with only the laptop_* columns —
+//     PostgREST's merge-duplicates resolution only overwrites columns present
+//     in the payload, so phone_count is never touched.
+//   - The Android app reads this row and merges with its phone count
 
-const FIREBASE_DB_URL = 'https://nudgev0-default-rtdb.firebaseio.com';
-const SYNC_ALARM      = 'nudge_firebase_sync';
-const ALARM_INTERVAL  = 5; // minutes
+const SUPABASE_URL      = 'https://mvfdwgcknmskadhlujgk.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im12ZmR3Z2Nrbm1za2FkaGx1amdrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzODM3NTMsImV4cCI6MjA5Njk1OTc1M30.xN66ohuXKM6EnyYM1dt9-7ctgB29FLXFs8YeH27HqWE';
+const SYNC_ALARM        = 'nudge_supabase_sync';
+const ALARM_INTERVAL    = 5; // minutes
 
 // Local date — matches Android's SimpleDateFormat("yyyy-MM-dd") which uses local timezone.
 // Do NOT use toISOString() — that returns UTC, which can be a day ahead in US timezones.
@@ -21,6 +24,13 @@ function localDateString() {
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
+}
+
+function supabaseHeaders() {
+  return {
+    'apikey':        SUPABASE_ANON_KEY,
+    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+  };
 }
 
 // ─── Badge helpers ────────────────────────────────────────────────────────────
@@ -49,22 +59,19 @@ async function refreshBadge(pendingScrolls) {
 }
 
 // ─── Initialise badge on service worker startup ───────────────────────────────
-// Also bootstrap syncedCounts from Firebase in case local storage was cleared
+// Also bootstrap syncedCounts from Supabase in case local storage was cleared
 // (reinstall, clear data) — prevents the next flush overwriting a higher count.
 chrome.storage.local.get(['pendingScrolls', 'syncedCounts', 'nudgeSyncId'], async ({ pendingScrolls, syncedCounts, nudgeSyncId }) => {
   if (nudgeSyncId) {
     const today = localDateString();
     const localSynced = (syncedCounts ?? {})[today] ?? 0;
     try {
-      const res = await fetch(`${FIREBASE_DB_URL}/users/${nudgeSyncId}/laptop/${today}.json`);
-      if (res.ok) {
-        const data = await res.json();
-        const firebaseCount = data?.laptop_count ?? 0;
-        if (firebaseCount > localSynced) {
-          const updated = { ...(syncedCounts ?? {}), [today]: firebaseCount };
-          await chrome.storage.local.set({ syncedCounts: updated });
-          console.log(`[Nudge] Bootstrapped syncedCounts from Firebase: ${firebaseCount}`);
-        }
+      const row = await fetchSyncRow(nudgeSyncId, today);
+      const supabaseCount = row?.laptop_count ?? 0;
+      if (supabaseCount > localSynced) {
+        const updated = { ...(syncedCounts ?? {}), [today]: supabaseCount };
+        await chrome.storage.local.set({ syncedCounts: updated });
+        console.log(`[Nudge] Bootstrapped syncedCounts from Supabase: ${supabaseCount}`);
       }
     } catch (_) {}
   }
@@ -104,7 +111,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   return true;
 });
 
-// ─── Alarm: flush to Firebase ─────────────────────────────────────────────────
+// ─── Alarm: flush to Supabase ──────────────────────────────────────────────────
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === SYNC_ALARM) flush();
 });
@@ -139,7 +146,7 @@ async function flush() {
   const results = await Promise.allSettled(
     Object.entries(byDate).map(([date, data]) => {
       const alreadySynced = (syncedCounts ?? {})[date] ?? 0;
-      return pushToFirebase(nudgeSyncId, date, data, alreadySynced);
+      return pushToSupabase(nudgeSyncId, date, data, alreadySynced);
     })
   );
 
@@ -154,44 +161,48 @@ async function flush() {
       // Accumulate per-domain breakdown
       if (!updDomains[date]) updDomains[date] = {};
       for (const [domain, count] of Object.entries(data.domains)) {
-        const key = domain.replace(/\./g, '_');
-        updDomains[date][key] = (updDomains[date][key] ?? 0) + count;
+        updDomains[date][domain] = (updDomains[date][domain] ?? 0) + count;
       }
     }
     await chrome.storage.local.set({ pendingScrolls: {}, syncedCounts: updCounts, syncedDomains: updDomains });
-    console.log('[Nudge] Synced to Firebase:', byDate);
+    console.log('[Nudge] Synced to Supabase:', byDate);
   } else {
-    console.warn('[Nudge] Some Firebase writes failed — will retry next alarm.');
+    console.warn('[Nudge] Some Supabase writes failed — will retry next alarm.');
   }
   refreshBadge({}); // update badge after flush
 }
 
-// ─── Write to Firebase Realtime Database via REST ────────────────────────────
-// Uses PATCH so it merges into existing data — never overwrites phone_count.
-// Path: /users/{syncId}/laptop/{date}
-//   laptop_count  → total scrolls from laptop (accumulated via server increment trick)
-//   domains       → breakdown per site
-//   synced_at     → epoch ms
-// alreadySynced = what this extension has already confirmed pushed today (from local storage)
-// This avoids reading stale Firebase data from other sessions/reinstalls
-async function pushToFirebase(syncId, date, data, alreadySynced = 0) {
-  // Firebase forbids '.' in key names
-  const sanitizedDomains = {};
-  for (const [domain, count] of Object.entries(data.domains)) {
-    sanitizedDomains[domain.replace(/\./g, '_')] = count;
-  }
+// ─── Fetch a single sync_state row (sync_id, date) ───────────────────────────
+async function fetchSyncRow(syncId, date) {
+  const url = `${SUPABASE_URL}/rest/v1/sync_state?sync_id=eq.${encodeURIComponent(syncId)}&date=eq.${date}&select=laptop_count,laptop_synced_at`;
+  const res = await fetch(url, { headers: supabaseHeaders() });
+  if (!res.ok) throw new Error(`Could not reach Supabase (HTTP ${res.status})`);
+  const rows = await res.json();
+  return rows[0] ?? null;
+}
 
-  const writeUrl = `${FIREBASE_DB_URL}/users/${syncId}/laptop/${date}.json`;
-  const payload  = {
-    laptop_count: alreadySynced + data.total,
-    domains:      sanitizedDomains,
-    synced_at:    Date.now(),
-  };
+// ─── Upsert laptop_* columns via PostgREST ───────────────────────────────────
+// on_conflict=sync_id,date + Prefer: resolution=merge-duplicates means only the
+// columns present in the payload are overwritten — phone_count is never touched.
+// alreadySynced = what this extension has already confirmed pushed today (from
+// local storage). This avoids reading stale Supabase data from other sessions/reinstalls.
+async function pushToSupabase(syncId, date, data, alreadySynced = 0) {
+  const payload = [{
+    sync_id:          syncId,
+    date:             date,
+    laptop_count:     alreadySynced + data.total,
+    laptop_domains:   data.domains,
+    laptop_synced_at: new Date().toISOString(),
+  }];
 
-  const writeRes = await fetch(writeUrl, {
-    method:  'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify(payload),
+  const writeRes = await fetch(`${SUPABASE_URL}/rest/v1/sync_state?on_conflict=sync_id,date`, {
+    method:  'POST',
+    headers: {
+      ...supabaseHeaders(),
+      'Content-Type': 'application/json',
+      'Prefer':       'resolution=merge-duplicates,return=minimal',
+    },
+    body: JSON.stringify(payload),
   });
 
   if (!writeRes.ok) {
@@ -200,6 +211,6 @@ async function pushToFirebase(syncId, date, data, alreadySynced = 0) {
     return false;
   }
 
-  console.log(`[Nudge] Pushed total=${alreadySynced + data.total} to Firebase (${data.total} new)`);
+  console.log(`[Nudge] Pushed total=${alreadySynced + data.total} to Supabase (${data.total} new)`);
   return true;
 }

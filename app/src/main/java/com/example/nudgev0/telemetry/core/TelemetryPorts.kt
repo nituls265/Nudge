@@ -32,12 +32,20 @@ interface TelemetryStorage {
     suspend fun queuedEvents(): List<String>
     suspend fun appendQueuedEvent(json: String)
     suspend fun clearQueue()
+
+    /** Offline queue for product-analytics events (separate table/endpoint). */
+    suspend fun queuedProductEvents(): List<String>
+    suspend fun appendQueuedProductEvent(json: String)
+    suspend fun clearProductEventQueue()
 }
 
 /** Thin HTTP POST. The implementation holds the endpoint + anon key. */
 interface TelemetryTransport {
     /** POST a JSON array body of event objects. Returns true on a 2xx insert. */
     suspend fun postEvents(jsonArrayBody: String): Boolean
+
+    /** POST a JSON array body of product-analytics event objects. */
+    suspend fun postProductEvents(jsonArrayBody: String): Boolean
 }
 
 /** Time, abstracted so the core stays platform-agnostic and testable. */

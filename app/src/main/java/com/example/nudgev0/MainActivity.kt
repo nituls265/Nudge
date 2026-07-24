@@ -36,9 +36,9 @@ class MainActivity : ComponentActivity() {
         // state; nothing is sent until the user opts in via the consent prompt.
         Telemetry.init(applicationContext)
 
-        // Firebase anonymous sign-in — generates the Sync Code used to link the Chrome extension
+        // Generates the Sync Code used to link the Chrome extension
         lifecycleScope.launch {
-            FirebaseSyncManager.init(applicationContext)
+            SyncManager.init(applicationContext)
         }
 
         val repository = NudgeRepository.get(applicationContext)

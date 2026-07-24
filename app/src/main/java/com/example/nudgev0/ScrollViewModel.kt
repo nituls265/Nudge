@@ -53,13 +53,13 @@ class ScrollViewModel(
     val isPaused:          StateFlow<Boolean> = MyAccessibilityService.isPaused
     val interventionState: StateFlow<InterventionState> = MyAccessibilityService.interventionState
 
-    // ── Laptop sync (Firebase Realtime Database) ──────────────────────────────
+    // ── Laptop sync (Supabase) ────────────────────────────────────────────────
 
-    val syncCode: StateFlow<String> = FirebaseSyncManager.syncCodeFlow
+    val syncCode: StateFlow<String> = SyncManager.syncCodeFlow
 
     private val today get() = DayBoundary.today()
 
-    val laptopCount: StateFlow<Int> = FirebaseSyncManager
+    val laptopCount: StateFlow<Int> = SyncManager
         .laptopCountFlow(appContext, today)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
@@ -68,7 +68,7 @@ class ScrollViewModel(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     // All laptop counts keyed by date — used for historical chart and breakdown
-    val laptopHistory: StateFlow<Map<String, Int>> = FirebaseSyncManager
+    val laptopHistory: StateFlow<Map<String, Int>> = SyncManager
         .laptopHistoryFlow(appContext)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 

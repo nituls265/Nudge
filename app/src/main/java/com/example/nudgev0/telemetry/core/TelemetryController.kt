@@ -90,4 +90,30 @@ class TelemetryController(
         if (ok) storage.clearQueue()
         return ok
     }
+
+    /**
+     * Enqueue a product-analytics event (feature usage, intervention funnel).
+     * No-op unless opted in — same consent gate as the retention events, just
+     * a separate table so [TelemetryEvent]'s "exactly two events" contract
+     * stays true.
+     */
+    suspend fun recordProductEvent(eventType: String, metadataJson: String) {
+        if (!storage.isOptedIn()) return
+        val installId = storage.installId() ?: return
+        storage.appendQueuedProductEvent(
+            ProductEvent(eventType, installId, appVersion, metadataJson).toJson()
+        )
+        flushProductEvents()
+    }
+
+    /** @return true if the product-event queue is empty afterwards. */
+    suspend fun flushProductEvents(): Boolean {
+        if (!storage.isOptedIn()) return false
+        val queued = storage.queuedProductEvents()
+        if (queued.isEmpty()) return true
+        val body = queued.joinToString(prefix = "[", postfix = "]", separator = ",")
+        val ok = transport.postProductEvents(body)
+        if (ok) storage.clearProductEventQueue()
+        return ok
+    }
 }

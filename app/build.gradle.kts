@@ -4,7 +4,6 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     id("kotlin-kapt")
-    alias(libs.plugins.google.gms.google.services)
 }
 
 android {
@@ -19,6 +18,24 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    flavorDimensions += "distribution"
+    productFlavors {
+        // Default flavor — full Supabase telemetry + phone/laptop scroll sync,
+        // as used for the developer's own devices.
+        create("dev") {
+            dimension = "distribution"
+            buildConfigField("boolean", "ENABLE_CLOUD_FEATURES", "true")
+        }
+        // For builds handed to someone else to install (e.g. `assembleFriendDebug`).
+        // Disables all Supabase telemetry and laptop-sync at the source —
+        // nothing leaves the device. No backend project needed since nothing
+        // is ever sent.
+        create("friend") {
+            dimension = "distribution"
+            buildConfigField("boolean", "ENABLE_CLOUD_FEATURES", "false")
+        }
     }
 
     buildTypes {
@@ -42,16 +59,17 @@ android {
         // BuildConfig.DEBUG gates the telemetry payload-inspection log (a no-op in release).
         buildConfig = true
     }
+
+    // F-Droid reproducible-builds requirement: strip the Google Play install
+    // metadata block that Gradle otherwise embeds in the APK/AAB.
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
+    }
 }
 
 dependencies {
     implementation(libs.androidx.appcompat)
-    // Use the Firebase BOM to manage versions safely
-    implementation(platform("com.google.firebase:firebase-bom:33.1.0"))
-    implementation("com.google.firebase:firebase-analytics-ktx")
-    implementation("com.google.firebase:firebase-auth-ktx")
-    implementation("com.google.firebase:firebase-database-ktx")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
 
     val room_version = "2.6.1"
     implementation("androidx.work:work-runtime-ktx:2.9.0")

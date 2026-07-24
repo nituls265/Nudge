@@ -1,6 +1,7 @@
 package com.example.nudgev0.telemetry
 
 import android.content.Context
+import com.example.nudgev0.BuildConfig
 import com.example.nudgev0.telemetry.android.AndroidClock
 import com.example.nudgev0.telemetry.android.AndroidInstallIdGenerator
 import com.example.nudgev0.telemetry.android.DataStoreTelemetryStorage
@@ -37,6 +38,11 @@ object Telemetry {
     val optedIn: StateFlow<Boolean> = _optedIn.asStateFlow()
 
     fun init(context: Context) {
+        // Friend builds never initialize the controller — hasAnswered stays null
+        // forever, so the consent prompt never shows and onAppOpen()/optIn() stay
+        // safe no-ops (guarded by `initialized` below). Nothing is ever queued
+        // or sent.
+        if (!BuildConfig.ENABLE_CLOUD_FEATURES) return
         if (initialized) return
         synchronized(this) {
             if (initialized) return
@@ -101,6 +107,23 @@ object Telemetry {
     /** Used by the network-constrained flush worker. */
     suspend fun flushNow(): Boolean {
         if (!initialized) return false
-        return controller.flush()
+        val eventsOk = controller.flush()
+        val productEventsOk = controller.flushProductEvents()
+        return eventsOk && productEventsOk
+    }
+
+    /**
+     * Enqueue a product-analytics event (feature usage, intervention funnel).
+     * No-op unless opted in. [metadataJson] must be a valid JSON object string,
+     * e.g. `{"level":2}` — defaults to an empty object.
+     */
+    fun logProductEvent(eventType: String, metadataJson: String = "{}") {
+        if (!initialized) return
+        scope.launch {
+            controller.recordProductEvent(eventType, metadataJson)
+            if (!controller.flushProductEvents() && controller.isOptedIn()) {
+                TelemetryFlushWorker.enqueue(appContext)
+            }
+        }
     }
 }

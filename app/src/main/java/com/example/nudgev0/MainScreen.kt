@@ -462,8 +462,9 @@ internal fun LaptopSyncCard(syncCode: String, context: Context) {
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    if (syncCode == "—") "Signing in…"
-                    else syncCode.chunked(4).joinToString("  "),
+                    if (syncCode != "—") syncCode.chunked(4).joinToString("  ")
+                    else if (BuildConfig.ENABLE_CLOUD_FEATURES) "Loading…"
+                    else "Not available in this build",
                     style         = MaterialTheme.typography.titleMedium,
                     fontWeight    = FontWeight.Bold,
                     letterSpacing = 2.sp,

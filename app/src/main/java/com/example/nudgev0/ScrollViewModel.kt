@@ -269,7 +269,10 @@ class ScrollViewModel(
                             sessionBehaviour = d.sessionBehaviour,
                             unlockFrequency  = d.unlockFrequency,
                             timeHygiene      = d.timeHygiene,
-                            appQuality       = d.appQuality
+                            appQuality       = d.appQuality,
+                            bedtimeScore     = d.bedtimeScore,
+                            gapScore         = d.gapScore,
+                            consistencyScore = d.consistencyScore
                         )
                     }.toMutableMap()
                     // Always inject the live score for today so it stays up-to-date
@@ -280,7 +283,10 @@ class ScrollViewModel(
                         sessionBehaviour = liveScore.sessionBehaviour,
                         unlockFrequency  = liveScore.unlockFrequency,
                         timeHygiene      = liveScore.timeHygiene,
-                        appQuality       = liveScore.appQuality
+                        appQuality       = liveScore.appQuality,
+                        bedtimeScore     = liveScore.bedtimeScore,
+                        gapScore         = liveScore.gapScore,
+                        consistencyScore = liveScore.consistencyScore
                     )
 
                     filledDays(days, pointMap) { WellnessHistoryPoint(it, -1) }
@@ -506,7 +512,10 @@ class ScrollViewModel(
                         sessionBehaviour = score.sessionBehaviour,
                         unlockFrequency  = score.unlockFrequency,
                         timeHygiene      = score.timeHygiene,
-                        appQuality       = score.appQuality
+                        appQuality       = score.appQuality,
+                        bedtimeScore     = score.bedtimeScore,
+                        gapScore         = score.gapScore,
+                        consistencyScore = score.consistencyScore
                     )
                 )
             }
@@ -604,5 +613,8 @@ data class WellnessHistoryPoint(
     val sessionBehaviour: Int = -1,
     val unlockFrequency: Int  = -1,
     val timeHygiene: Int      = -1,
-    val appQuality: Int       = -1
+    val appQuality: Int       = -1,
+    val bedtimeScore: Int     = -1,
+    val gapScore: Int         = -1,
+    val consistencyScore: Int = -1
 )

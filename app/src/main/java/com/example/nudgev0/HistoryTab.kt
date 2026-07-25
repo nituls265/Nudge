@@ -46,6 +46,7 @@ fun HistoryTab(vm: ScrollViewModel, onSettingsClick: () -> Unit) {
     // so stale selections never carry over to a different dataset
     var chartSelectedIndex   by remember(metricTab, selectedRange) { mutableStateOf<Int?>(null) }
     var wellnessSelectedIdx  by remember(selectedRange) { mutableStateOf<Int?>(null) }
+    var hygieneSelectedIdx   by remember(selectedRange) { mutableStateOf<Int?>(null) }
 
     val accentColor = when (metricTab) {
         "scrolls" -> MetricScrolls
@@ -133,6 +134,42 @@ fun HistoryTab(vm: ScrollViewModel, onSettingsClick: () -> Unit) {
             EmptyHistoryCard(
                 icon    = "📈",
                 message = "Wellness trend appears after 2+ days of data"
+            )
+        }
+
+        Spacer(Modifier.height(24.dp))
+        HorizontalDivider(color = Slate800)
+        Spacer(Modifier.height(24.dp))
+
+        // ════════════════════════════════════════════════════════════════════
+        // PRIMARY — Time Hygiene Trend
+        // ════════════════════════════════════════════════════════════════════
+
+        SectionLabel("TIME HYGIENE TREND")
+        Spacer(Modifier.height(12.dp))
+
+        if (validHistory.size >= 2) {
+
+            SubScoreTrendChart(
+                history       = wellnessHistory,
+                selectedRange = selectedRange,
+                selectedIndex = hygieneSelectedIdx,
+                onSelect      = { hygieneSelectedIdx = it },
+                valueOf       = { it.timeHygiene },
+                maxScore      = 20,
+                tierOf        = { WellnessTier.from(it * 100 / 20) }
+            )
+
+            val selectedHygienePoint = hygieneSelectedIdx?.let { wellnessHistory.getOrNull(it) }
+            if (selectedHygienePoint != null && selectedHygienePoint.timeHygiene >= 0) {
+                Spacer(Modifier.height(16.dp))
+                TimeHygieneDayBreakdown(point = selectedHygienePoint)
+            }
+
+        } else {
+            EmptyHistoryCard(
+                icon    = "🌙",
+                message = "Time Hygiene trend appears after 2+ days of data"
             )
         }
 
@@ -234,6 +271,27 @@ private fun WellnessDayBreakdown(point: WellnessHistoryPoint) {
         ScoreComponent("Unlock Frequency", score.unlockFrequency,  15)
         ScoreComponent("Time Hygiene",     score.timeHygiene,      20)
         ScoreComponent("App Quality",      score.appQuality,       15)
+    }
+}
+
+// ── Time Hygiene sub-component breakdown (shown when a hygiene trend bar is tapped) ──
+
+@Composable
+private fun TimeHygieneDayBreakdown(point: WellnessHistoryPoint) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        SectionLabel("BREAKDOWN")
+        Spacer(Modifier.height(10.dp))
+        if (point.bedtimeScore >= 0) {
+            ScoreComponent("Bedtime", point.bedtimeScore, 10,
+                subLabel = "How late your phone use ran into the night")
+            ScoreComponent("Sleep Gap", point.gapScore, 6,
+                subLabel = "Rest between last night's and this morning's first unlock")
+            ScoreComponent("Consistency", point.consistencyScore, 4,
+                subLabel = "How close to your usual wake time")
+        } else {
+            ScoreComponent("Time Hygiene", point.timeHygiene, 20,
+                subLabel = "Detailed breakdown isn't available for this day")
+        }
     }
 }
 

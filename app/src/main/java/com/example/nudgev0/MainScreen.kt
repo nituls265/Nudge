@@ -911,9 +911,37 @@ internal fun WellnessTrendChart(
     selectedIndex: Int?,
     onSelect: (Int?) -> Unit
 ) {
+    SubScoreTrendChart(
+        history       = history,
+        selectedRange = selectedRange,
+        selectedIndex = selectedIndex,
+        onSelect      = onSelect,
+        valueOf       = { it.score },
+        maxScore      = 90,
+        tierOf        = { WellnessTier.from(it) },
+        showLegend    = true
+    )
+}
+
+// ── SubScoreTrendChart ──────────────────────────────────────────────────────
+// Generalised day-by-day bar chart for any 0..maxScore wellness sub-metric,
+// colour-scaled onto the same 5-tier language as the overall score. Backs both
+// the composite Wellness Trend (via WellnessTrendChart above) and per-driver
+// trends like Time Hygiene, so the two always look and behave identically.
+
+@Composable
+internal fun SubScoreTrendChart(
+    history: List<WellnessHistoryPoint>,
+    selectedRange: Int,
+    selectedIndex: Int?,
+    onSelect: (Int?) -> Unit,
+    valueOf: (WellnessHistoryPoint) -> Int,
+    maxScore: Int,
+    tierOf: (Int) -> WellnessTier,
+    showLegend: Boolean = false
+) {
     if (history.isEmpty()) return
 
-    val maxScore  = 90
     val dfParse   = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
     val dfDisplay = remember { SimpleDateFormat("MMM d",      Locale.getDefault()) }
 
@@ -962,10 +990,11 @@ internal fun WellnessTrendChart(
             history.forEachIndexed { index, point ->
                 val isToday    = index == history.lastIndex
                 val isSelected = index == selectedIndex
-                val hasData    = point.score >= 0
-                val tier       = if (hasData) WellnessTier.from(point.score) else null
+                val value      = valueOf(point)
+                val hasData    = value >= 0
+                val tier       = if (hasData) tierOf(value) else null
                 val barColor   = if (tier != null) Color(tier.colorHex) else Slate700
-                val heightFrac = if (hasData) (point.score.toFloat() / maxScore).coerceAtMost(1f) else 0.03f
+                val heightFrac = if (hasData) (value.toFloat() / maxScore).coerceAtMost(1f) else 0.03f
                 val barH       = (chartH.value * heightFrac).dp.coerceAtLeast(3.dp)
                 val alpha      = when {
                     isSelected   -> 1f
@@ -989,7 +1018,7 @@ internal fun WellnessTrendChart(
                     if (selectedRange == 7) {
                         Box(modifier = Modifier.height(16.dp), contentAlignment = Alignment.BottomCenter) {
                             if (hasData) Text(
-                                point.score.toString(), fontSize = 9.sp,
+                                value.toString(), fontSize = 9.sp,
                                 color = (if (isSelected || (isToday && !hasSelection))
                                     Color(tier!!.colorHex) else Slate500).copy(alpha = alpha),
                                 fontWeight = if (isSelected || isToday) FontWeight.Bold else FontWeight.Normal
@@ -1023,19 +1052,20 @@ internal fun WellnessTrendChart(
             }
         }
 
-        // Tier legend
-        Spacer(Modifier.height(10.dp))
-        Row(
-            modifier              = Modifier.horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            WellnessTier.entries.forEach { t ->
-                Row(
-                    verticalAlignment     = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(3.dp)
-                ) {
-                    Box(modifier = Modifier.size(7.dp).background(Color(t.colorHex), CircleShape))
-                    Text(t.label, fontSize = 9.sp, color = Slate500)
+        if (showLegend) {
+            Spacer(Modifier.height(10.dp))
+            Row(
+                modifier              = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                WellnessTier.entries.forEach { t ->
+                    Row(
+                        verticalAlignment     = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        Box(modifier = Modifier.size(7.dp).background(Color(t.colorHex), CircleShape))
+                        Text(t.label, fontSize = 9.sp, color = Slate500)
+                    }
                 }
             }
         }

@@ -38,7 +38,10 @@ data class WellnessScore(
     val appQuality: Int,               // 0–15
     val flaggedApps: List<String>,     // display names of risky apps in the top-3 sources
     val todayScrolls: Int,             // total scrolls used to compute scroll volume
-    val baselineScrolls: Int           // 7-day avg used as reference (0 = calibrating)
+    val baselineScrolls: Int,          // 7-day avg used as reference (0 = calibrating)
+    val bedtimeScore: Int = -1,        // 0–10 — Time Hygiene sub-component (-1 = unavailable)
+    val gapScore: Int = -1,            // 0–6  — Time Hygiene sub-component (-1 = unavailable)
+    val consistencyScore: Int = -1     // 0–4  — Time Hygiene sub-component (-1 = unavailable)
 )
 
 // ── Risky app registry ────────────────────────────────────────────────────────
@@ -269,7 +272,10 @@ object WellnessCalculator {
             appQuality       = appQuality,
             flaggedApps      = flaggedApps,
             todayScrolls     = todayScrolls,
-            baselineScrolls  = sevenDayAvg.toInt()
+            baselineScrolls  = sevenDayAvg.toInt(),
+            bedtimeScore     = bedtimePts,
+            gapScore         = gapPts,
+            consistencyScore = consistencyPts
         )
     }
 

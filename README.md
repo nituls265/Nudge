@@ -120,7 +120,7 @@ Requirements:
 Steps:
 
 1. Clone the repo and open it in Android Studio.
-2. Let Gradle sync, then run the `dev` flavor's `app` configuration on a device or emulator running Android 7.0 (API 24) or higher. Use the `friend` flavor (`assembleFriendDebug` / `installFriendDebug`) for a build with all cloud features (telemetry + laptop-sync) disabled at the source.
+2. Let Gradle sync, then run the `dev` flavor's `app` configuration on a device or emulator running Android 7.0 (API 24) or higher. Use the `friend` flavor (`assembleFriendDebug` / `installFriendDebug`) for a build with analytics/telemetry compiled out entirely — laptop-sync still works, feature parity with `dev` otherwise.
 3. On first launch, tap **Show Bubble** and grant the two permissions when prompted.
 
 ## Privacy & telemetry
@@ -130,12 +130,13 @@ Nudge's on-device scroll/usage tracking **never leaves your phone by default**
 your device, both to the same Supabase project (the developer's, not a
 per-user "bring your own backend" — see below):
 
-1. **Opt-in analytics** (retention + product usage) — off by default.
+1. **Opt-in analytics** (retention + product usage) — off by default, and
+   compiled out entirely (not just toggled off) in `friend`-flavor builds,
+   including the one published to F-Droid.
 2. **Laptop-sync** (the Chrome extension pairing feature) — not gated by the
-   analytics opt-in; it sends data whenever you pair a Sync Code, on any
-   `dev`-flavor build. Use a `friend`-flavor build (see
-   [Building](#building)) if you don't want this feature or any network
-   activity at all — it disables both at the source.
+   analytics opt-in or the flavor; it sends data whenever you pair a Sync
+   Code, on both `dev` and `friend` builds. Not pairing the extension is
+   the opt-out (see [Laptop-sync](#laptop-sync-chrome-extension) below).
 
 ### Opt-in analytics
 
@@ -170,8 +171,8 @@ Chrome Extension Sync**, your laptop's scroll counts — including which
 tracked-site **domains** you scrolled on (e.g. `reddit.com`) — are sent to a
 `sync_state` table on the same Supabase project, keyed by that Sync Code
 rather than the anonymous analytics ID. There is no separate opt-out toggle
-for this in the app; not pairing the extension is the opt-out. A `friend`
-flavor build disables it entirely (the Sync Code never resolves).
+for this in the app; not pairing the extension is the opt-out. This works
+the same way on both `dev` and `friend` builds.
 
 ### How it works / self-hosting
 

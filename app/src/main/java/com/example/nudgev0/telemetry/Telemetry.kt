@@ -38,11 +38,11 @@ object Telemetry {
     val optedIn: StateFlow<Boolean> = _optedIn.asStateFlow()
 
     fun init(context: Context) {
-        // Friend builds never initialize the controller — hasAnswered stays null
-        // forever, so the consent prompt never shows and onAppOpen()/optIn() stay
-        // safe no-ops (guarded by `initialized` below). Nothing is ever queued
-        // or sent.
-        if (!BuildConfig.ENABLE_CLOUD_FEATURES) return
+        // Builds without telemetry (e.g. friend) never initialize the controller —
+        // hasAnswered stays null forever, so the consent prompt never shows and
+        // onAppOpen()/optIn() stay safe no-ops (guarded by `initialized` below).
+        // Nothing is ever queued or sent.
+        if (!BuildConfig.ENABLE_TELEMETRY) return
         if (initialized) return
         synchronized(this) {
             if (initialized) return

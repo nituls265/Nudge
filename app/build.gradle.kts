@@ -14,27 +14,29 @@ android {
         applicationId = "com.nitulshah.nudge"
         minSdk = 24
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.2"
+        versionCode = 5
+        versionName = "1.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     flavorDimensions += "distribution"
     productFlavors {
-        // Default flavor — full Supabase telemetry + phone/laptop scroll sync,
+        // Default flavor — phone/laptop scroll sync AND opt-in analytics,
         // as used for the developer's own devices.
         create("dev") {
             dimension = "distribution"
             buildConfigField("boolean", "ENABLE_CLOUD_FEATURES", "true")
+            buildConfigField("boolean", "ENABLE_TELEMETRY", "true")
         }
-        // For builds handed to someone else to install (e.g. `assembleFriendDebug`).
-        // Disables all Supabase telemetry and laptop-sync at the source —
-        // nothing leaves the device. No backend project needed since nothing
-        // is ever sent.
+        // For builds handed to someone else to install (e.g. `assembleFriendDebug`),
+        // including the public F-Droid build. Feature parity with dev — phone/
+        // laptop scroll sync still works — but analytics/telemetry (retention +
+        // product events) is compiled out entirely, not just toggled off.
         create("friend") {
             dimension = "distribution"
-            buildConfigField("boolean", "ENABLE_CLOUD_FEATURES", "false")
+            buildConfigField("boolean", "ENABLE_CLOUD_FEATURES", "true")
+            buildConfigField("boolean", "ENABLE_TELEMETRY", "false")
         }
     }
 

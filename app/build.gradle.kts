@@ -11,10 +11,10 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "io.github.nituls265.nudge"
+        applicationId = "com.nitulshah.nudge"
         minSdk = 24
         targetSdk = 36
-        versionCode = 3
+        versionCode = 4
         versionName = "1.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

@@ -77,6 +77,7 @@ class MyAccessibilityService : AccessibilityService() {
     private var sessionCallMs    = 0L   // accumulated call ms in the current session
     private var callModeStartMs  = 0L   // when the current call segment started (0 = not in call)
     private var audioPollingJob: Job? = null
+    private var audioModeListener: AudioManager.OnModeChangedListener? = null
 
     private val unlockReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -302,39 +303,63 @@ class MyAccessibilityService : AccessibilityService() {
         saveUnlockToDatabase(today)
     }
 
-    // ── Call-mode polling ─────────────────────────────────────────────────────
-    // Polls AudioManager every 8 seconds while a session is active.
+    // ── Call-mode tracking ─────────────────────────────────────────────────────
     // MODE_IN_CALL      = native GSM/cellular calls
     // MODE_IN_COMMUNICATION = VoIP: WhatsApp, Zoom, Google Meet, FaceTime, Teams …
     // Any time spent in either mode is accumulated in sessionCallMs and later
     // subtracted from the session duration in onScreenOff().
     //
-    // Battery cost: AudioManager.mode is a single binder read — negligible.
-    // 8-second resolution means worst-case ±8 s error on a 30-min call (~0.4%).
+    // On API 31+ (S) we use AudioManager.OnModeChangedListener, which is
+    // event-driven and reacts immediately to mode changes. On older API
+    // levels (24-30) that listener doesn't exist, so we fall back to polling
+    // AudioManager.mode every 8 seconds.
+    // Battery cost of the fallback: AudioManager.mode is a single binder
+    // read — negligible. 8-second resolution means worst-case ±8 s error on
+    // a 30-min call (~0.4%).
 
-    private fun startCallModePolling() {
-        audioPollingJob?.cancel()
-        audioPollingJob = serviceScope.launch {
-            while (true) {
-                val now      = System.currentTimeMillis()
-                val isInCall = audioManager.mode == AudioManager.MODE_IN_CALL ||
-                               audioManager.mode == AudioManager.MODE_IN_COMMUNICATION
-
-                if (isInCall) {
-                    if (callModeStartMs == 0L) callModeStartMs = now   // call just started
-                } else {
-                    if (callModeStartMs > 0L) {
-                        sessionCallMs  += (now - callModeStartMs)       // call just ended
-                        callModeStartMs = 0L
-                    }
-                }
-                delay(8_000L)
+    private fun updateCallMode(isInCall: Boolean, now: Long = System.currentTimeMillis()) {
+        if (isInCall) {
+            if (callModeStartMs == 0L) callModeStartMs = now   // call just started
+        } else {
+            if (callModeStartMs > 0L) {
+                sessionCallMs  += (now - callModeStartMs)       // call just ended
+                callModeStartMs = 0L
             }
         }
     }
 
-    /** Cancel the polling job and flush any open call segment up to [flushAt]. */
+    private fun startCallModePolling() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            audioModeListener?.let { audioManager.removeOnModeChangedListener(it) }
+            val listener = AudioManager.OnModeChangedListener { mode ->
+                val isInCall = mode == AudioManager.MODE_IN_CALL ||
+                               mode == AudioManager.MODE_IN_COMMUNICATION
+                updateCallMode(isInCall)
+            }
+            audioModeListener = listener
+            audioManager.addOnModeChangedListener(mainExecutor, listener)
+            // Capture the mode as it stands right now, in case a call is already in progress.
+            val isInCall = audioManager.mode == AudioManager.MODE_IN_CALL ||
+                           audioManager.mode == AudioManager.MODE_IN_COMMUNICATION
+            updateCallMode(isInCall)
+        } else {
+            audioPollingJob?.cancel()
+            audioPollingJob = serviceScope.launch {
+                while (true) {
+                    val now      = System.currentTimeMillis()
+                    val isInCall = audioManager.mode == AudioManager.MODE_IN_CALL ||
+                                   audioManager.mode == AudioManager.MODE_IN_COMMUNICATION
+                    updateCallMode(isInCall, now)
+                    delay(8_000L)
+                }
+            }
+        }
+    }
+
+    /** Stop call-mode tracking and flush any open call segment up to [flushAt]. */
     private fun stopCallModePolling(flushAt: Long = System.currentTimeMillis()) {
+        audioModeListener?.let { audioManager.removeOnModeChangedListener(it) }
+        audioModeListener = null
         audioPollingJob?.cancel()
         audioPollingJob = null
         if (callModeStartMs > 0L) {

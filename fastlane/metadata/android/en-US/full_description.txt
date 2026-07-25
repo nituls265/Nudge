@@ -10,12 +10,11 @@ Nudge counts how many times you scroll, across every app on your phone, and turn
 <li>A history dashboard with 7-day, 30-day, and 3-month views, peak-activity-hour insight, and a per-app breakdown of where your scrolling actually goes.</li>
 <li>Progressive interventions: a gentle nudge once you cross your own thresholds, escalating only if you keep going.</li>
 <li>Pause and manual reset, for the days you don't want it tracking.</li>
-<li>Optional laptop-scroll sync via a companion Chrome extension, if you want your desktop scrolling counted too.</li>
 </ul>
 
 <b>Privacy</b>
 
-All tracking is on-device by default and stored in a local database — nothing leaves your phone unless you explicitly turn on the one opt-in, anonymous analytics toggle (off by default), which sends only a random ID and the dates you opened the app, nothing about your usage itself. No Google Analytics, no advertising or device identifiers, no proprietary SDKs of any kind.
+This build never requests network access — there's no INTERNET permission in the manifest at all, so there's nothing to opt into and nothing that could leave your phone even by mistake. Every scroll, score, and history entry stays in a local database on-device. No analytics, no crash reporting, no Google services, no advertising or device identifiers, no proprietary SDKs of any kind.
 
 <b>Permissions</b>
 

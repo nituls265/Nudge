@@ -1,1 +1,0 @@
-First F-Droid release. All-app scroll counter, daily wellness score with five drivers (including a Time Hygiene breakdown into Bedtime/Sleep Gap/Consistency), 7/30/90-day history, and progressive interventions. Fully local: no INTERNET permission, no analytics, no proprietary SDKs of any kind.

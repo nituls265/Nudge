@@ -133,7 +133,10 @@ data class WellnessDay(
     val sessionBehaviour: Int,
     val unlockFrequency: Int,
     val timeHygiene: Int,
-    val appQuality: Int
+    val appQuality: Int,
+    val bedtimeScore: Int = -1,       // 0–10 Time Hygiene sub-component; -1 = pre-migration row
+    val gapScore: Int = -1,           // 0–6  Time Hygiene sub-component; -1 = pre-migration row
+    val consistencyScore: Int = -1    // 0–4  Time Hygiene sub-component; -1 = pre-migration row
 )
 
 @Dao
@@ -185,11 +188,19 @@ val MIGRATION_4_5 = object : Migration(4, 5) {
     }
 }
 
+val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL("ALTER TABLE wellness_history ADD COLUMN bedtimeScore INTEGER NOT NULL DEFAULT -1")
+        database.execSQL("ALTER TABLE wellness_history ADD COLUMN gapScore INTEGER NOT NULL DEFAULT -1")
+        database.execSQL("ALTER TABLE wellness_history ADD COLUMN consistencyScore INTEGER NOT NULL DEFAULT -1")
+    }
+}
+
 // ── Database ─────────────────────────────────────────────────────────────────
 
 @Database(
     entities = [ScrollDay::class, ScrollHour::class, UnlockDay::class, UnlockHour::class, AppScrollDay::class, WellnessDay::class],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 abstract class ScrollDatabase : RoomDatabase() {
@@ -208,7 +219,7 @@ abstract class ScrollDatabase : RoomDatabase() {
                     ScrollDatabase::class.java,
                     "scroll_database"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                     .build()
                 INSTANCE = instance
                 instance

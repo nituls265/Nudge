@@ -156,7 +156,10 @@ class ResetWorker(
                         sessionBehaviour = score.sessionBehaviour,
                         unlockFrequency  = score.unlockFrequency,
                         timeHygiene      = score.timeHygiene,
-                        appQuality       = score.appQuality
+                        appQuality       = score.appQuality,
+                        bedtimeScore     = score.bedtimeScore,
+                        gapScore         = score.gapScore,
+                        consistencyScore = score.consistencyScore
                     )
                 )
             }

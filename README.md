@@ -197,4 +197,4 @@ Server schema, the insert-only Row-Level-Security policies, and the retention
 
 ## License
 
-Not yet specified.
+Apache License 2.0 — see [LICENSE](LICENSE).

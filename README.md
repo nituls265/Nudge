@@ -4,7 +4,7 @@ An Android app that counts how many times you scroll across all your apps each d
 
 A draggable floating bubble shows the live count on top of whatever app you're using, and a Compose dashboard breaks down your history with 7-day, 30-day, and 3-month views plus a peak-activity-hour insight.
 
-> Status: pre-release (v0). Built as a personal project — package id is still `com.example.nudgev0`.
+> Status: pre-release (v0). Built as a personal project.
 >
 > No proprietary Google SDKs (Firebase, Play Services, etc.) — F-Droid compatible.
 >
@@ -189,7 +189,6 @@ Server schema, the insert-only Row-Level-Security policies, and the retention
 
 ## Roadmap / known gaps
 
-- Package id is still `com.example.nudgev0` — needs renaming before any Play Store release.
 - No unit/instrumentation tests beyond the scaffolded `ExampleUnitTest` and `ExampleInstrumentedTest`.
 - iOS is on the roadmap; the telemetry core (`telemetry/core/`) is pure Kotlin
   with no platform imports, so it lifts into a KMP `commonMain` unchanged (the

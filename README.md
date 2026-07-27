@@ -120,7 +120,7 @@ Requirements:
 Steps:
 
 1. Clone the repo and open it in Android Studio.
-2. Let Gradle sync, then run the `dev` flavor's `app` configuration on a device or emulator running Android 7.0 (API 24) or higher. Use the `friend` flavor (`assembleFriendDebug` / `installFriendDebug`) for a build with analytics/telemetry compiled out entirely — laptop-sync still works, feature parity with `dev` otherwise.
+2. Let Gradle sync, then run the `dev` flavor's `app` configuration on a device or emulator running Android 7.0 (API 24) or higher. Use the `foss` flavor (`assembleFossDebug` / `installFossDebug`) for a build with analytics/telemetry compiled out entirely — laptop-sync still works, feature parity with `dev` otherwise.
 3. On first launch, tap **Show Bubble** and grant the two permissions when prompted.
 
 ## Privacy & telemetry
@@ -131,11 +131,11 @@ your device, both to the same Supabase project (the developer's, not a
 per-user "bring your own backend" — see below):
 
 1. **Opt-in analytics** (retention + product usage) — off by default, and
-   compiled out entirely (not just toggled off) in `friend`-flavor builds,
+   compiled out entirely (not just toggled off) in `foss`-flavor builds,
    including the one published to F-Droid.
 2. **Laptop-sync** (the Chrome extension pairing feature) — not gated by the
    analytics opt-in or the flavor; it sends data whenever you pair a Sync
-   Code, on both `dev` and `friend` builds. Not pairing the extension is
+   Code, on both `dev` and `foss` builds. Not pairing the extension is
    the opt-out (see [Laptop-sync](#laptop-sync-chrome-extension) below).
 
 ### Opt-in analytics
@@ -172,7 +172,7 @@ tracked-site **domains** you scrolled on (e.g. `reddit.com`) — are sent to a
 `sync_state` table on the same Supabase project, keyed by that Sync Code
 rather than the anonymous analytics ID. There is no separate opt-out toggle
 for this in the app; not pairing the extension is the opt-out. This works
-the same way on both `dev` and `friend` builds.
+the same way on both `dev` and `foss` builds.
 
 ### How it works / self-hosting
 

@@ -14,7 +14,7 @@ android {
         applicationId = "com.nitulshah.nudge"
         minSdk = 24
         targetSdk = 36
-        versionCode = 5
+        versionCode = 6
         versionName = "1.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -29,11 +29,11 @@ android {
             buildConfigField("boolean", "ENABLE_CLOUD_FEATURES", "true")
             buildConfigField("boolean", "ENABLE_TELEMETRY", "true")
         }
-        // For builds handed to someone else to install (e.g. `assembleFriendDebug`),
-        // including the public F-Droid build. Feature parity with dev — phone/
-        // laptop scroll sync still works — but analytics/telemetry (retention +
-        // product events) is compiled out entirely, not just toggled off.
-        create("friend") {
+        // Public build (e.g. `assembleFossDebug`), including the F-Droid release.
+        // Feature parity with dev — phone/laptop scroll sync still works — but
+        // analytics/telemetry (retention + product events) is compiled out
+        // entirely, not just toggled off.
+        create("foss") {
             dimension = "distribution"
             buildConfigField("boolean", "ENABLE_CLOUD_FEATURES", "true")
             buildConfigField("boolean", "ENABLE_TELEMETRY", "false")

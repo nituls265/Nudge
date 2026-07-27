@@ -146,7 +146,7 @@ object WellnessCalculator {
         // manually-edited days, or genuinely very light past usage) — fall back
         // to the neutral "right on average" score so sparse data never gives 0.
         val scrollVolume = if (sevenDayAvg < 30f) {
-            25  // not enough baseline yet → neutral
+            if (todayScrolls == 0) 30 else 25  // zero scrolls is always best-case, even without a baseline to compare against
         } else {
             val pct = todayScrolls.toFloat() / sevenDayAvg
             when {

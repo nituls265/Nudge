@@ -214,7 +214,7 @@ class ScrollViewModel(
     // ── Live wellness score ───────────────────────────────────────────────────
 
     val wellnessScore: StateFlow<WellnessScore> = combine(
-        scrollCount,        // phone-only — matches phone-only baseline in sevenDayScrollAvg
+        totalScrollCount,   // phone + laptop — matches the "total scroll count" shown in the UI
         sevenDayScrollAvg,
         unlockCount,
         avgSessionMin,

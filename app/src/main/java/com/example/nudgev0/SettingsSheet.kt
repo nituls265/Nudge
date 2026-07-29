@@ -185,6 +185,26 @@ fun SettingsSheet(vm: ScrollViewModel, onDismiss: () -> Unit) {
             ) {
                 Text("Reset Today's Data", fontWeight = FontWeight.Bold)
             }
+
+            Spacer(Modifier.height(20.dp))
+
+            // ── App version — quiet footer, below all actionable settings so it
+            // never competes with them, but still easy to find when needed
+            // (bug reports, support, "am I on the latest build" checks).
+            // versionCode is internal build-bookkeeping, not user-facing info —
+            // only show it in debug builds; release users just see the plain
+            // marketing version. ─────────────────────────────────────────────
+            val versionLabel = if (BuildConfig.DEBUG)
+                "Nudge v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})"
+            else
+                "Nudge v${BuildConfig.VERSION_NAME}"
+            Text(
+                versionLabel,
+                modifier   = Modifier.fillMaxWidth(),
+                textAlign  = androidx.compose.ui.text.style.TextAlign.Center,
+                style      = MaterialTheme.typography.labelSmall,
+                color      = Slate500
+            )
         }
     }
 }

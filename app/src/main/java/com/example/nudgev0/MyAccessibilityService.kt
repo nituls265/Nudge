@@ -619,21 +619,22 @@ class MyAccessibilityService : AccessibilityService() {
             // the quick trailing-momentum case.
             if (now - lastDiagonalScrollTime < 2000) return
 
-            // Absorbed-gesture signature inside a WebView/browser: NO usable delta
-            // (-1 is the "unknown" sentinel) AND the page never moved (position 0/0).
-            // That combination means an embedded widget ate the gesture — e.g.
-            // scrubbing a stock chart in Google Search results (cls=WebView,
-            // dX=-1 dY=-1 sX=0 sY=0).
+            // No-usable-vertical-movement signature inside a WebView/browser: NO
+            // usable delta (-1 is the "unknown" sentinel) AND the vertical
+            // position never moved (sY==0). This covers two cases: an embedded
+            // widget absorbing the gesture entirely — e.g. scrubbing a stock
+            // chart in Google Search results (cls=WebView, dX=-1 dY=-1 sX=0
+            // sY=0) — and a purely horizontal element like a stories/reels tray
+            // on a page opened in the browser, which reports a real, moving sX
+            // but sY stuck at 0 (cls=View, dX=-1 dY=-1 sX=265→3001 sY=0).
             //
             // Crucially this no longer filters NORMAL browser scrolling: Chrome's
-            // compositor fires frequent FrameLayout events with a real delta
-            // (dY=265) at position 0/0 — those keep a usable delta so they count —
-            // and WebView events report a moved position (sY>0). The previous
-            // position-only check (scrollX==0 && scrollY==0) wrongly dropped the
-            // FrameLayout events, severely under-counting Chrome scrolling.
+            // compositor fires frequent FrameLayout events with a real, usable
+            // delta (dY=265) at position 0/0 — those never hit the sentinel
+            // branch, so genuine vertical scroll always keeps counting.
             if ((isWebView || isBrowser) &&
                 event.scrollDeltaX == -1 && event.scrollDeltaY == -1 &&
-                event.scrollX == 0 && event.scrollY == 0) return
+                event.scrollY == 0) return
         }
 
         // Browser/WebView engines can fire one event per pixel of scroll distance —

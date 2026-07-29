@@ -53,11 +53,15 @@ fun HomeTab(vm: ScrollViewModel, onSettingsClick: () -> Unit) {
 
     // Calibration state — read once per composition; SharedPrefs is fast and
     // this value only changes at midnight, so remember is correct here.
-    val calibrationDaysRemaining = remember {
+    val installDaysRemaining = remember {
         val prefs = context.getSharedPreferences("NudgePrefs", android.content.Context.MODE_PRIVATE)
         val first = prefs.getLong("FIRST_LAUNCH_DATE", System.currentTimeMillis())
         maxOf(0, 7 - TimeUnit.MILLISECONDS.toDays(System.currentTimeMillis() - first).toInt())
     }
+    // Also re-triggers if the underlying scroll history is missing (e.g. after
+    // a reset), not just during the first-ever 7 days since install.
+    val scrollBaselineDaysRemaining by vm.scrollBaselineDaysRemaining.collectAsState()
+    val calibrationDaysRemaining = maxOf(installDaysRemaining, scrollBaselineDaysRemaining)
     val isCalibrating = calibrationDaysRemaining > 0
 
     Column(

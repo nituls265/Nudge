@@ -30,11 +30,16 @@ fun SettingsSheet(vm: ScrollViewModel, onDismiss: () -> Unit) {
     val syncCode        by vm.syncCode.collectAsState()
 
     // Read calibration state once — same SharedPrefs trick as HomeTab
-    val calibrationDaysRemaining = remember {
+    val installDaysRemaining = remember {
         val prefs = context.getSharedPreferences("NudgePrefs", android.content.Context.MODE_PRIVATE)
         val first = prefs.getLong("FIRST_LAUNCH_DATE", System.currentTimeMillis())
         maxOf(0, 7 - TimeUnit.MILLISECONDS.toDays(System.currentTimeMillis() - first).toInt())
     }
+    // Kept in sync with HomeTab's data-driven re-trigger — see
+    // ScrollViewModel.scrollBaselineDaysRemaining for why this isn't purely
+    // install-date-based.
+    val scrollBaselineDaysRemaining by vm.scrollBaselineDaysRemaining.collectAsState()
+    val calibrationDaysRemaining = maxOf(installDaysRemaining, scrollBaselineDaysRemaining)
     val isCalibrating = calibrationDaysRemaining > 0
 
     // Both overlay permission AND accessibility service must be granted for the

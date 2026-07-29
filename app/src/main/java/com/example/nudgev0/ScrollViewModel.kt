@@ -211,6 +211,25 @@ class ScrollViewModel(
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0f)
     }
 
+    // ── Data-driven calibration re-trigger ────────────────────────────────────
+    // The 7-day calibration window in HomeTab/SettingsSheet is a one-time
+    // check against install date, so it can't tell "brand new" apart from
+    // "the underlying history got wiped" (e.g. a scroll-count reset during
+    // testing). This mirrors sevenDayScrollAvg's 3-real-day requirement but
+    // without the >=5-scroll filter, so a genuinely light usage day still
+    // counts as "we have data" — it only flips back on when history rows are
+    // actually missing, not just when usage is light.
+    val scrollBaselineDaysRemaining: StateFlow<Int> = run {
+        val startDate = DayBoundary.daysAgo(7)
+        repo.scrollHistorySince(startDate)
+            .map { dbDays ->
+                val today = DayBoundary.today()
+                val validDays = dbDays.count { it.date != today }
+                maxOf(0, 3 - validDays)
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 3)
+    }
+
     // ── Live wellness score ───────────────────────────────────────────────────
 
     val wellnessScore: StateFlow<WellnessScore> = combine(

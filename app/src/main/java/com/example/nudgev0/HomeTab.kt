@@ -59,10 +59,16 @@ fun HomeTab(vm: ScrollViewModel, onSettingsClick: () -> Unit) {
         maxOf(0, 7 - TimeUnit.MILLISECONDS.toDays(System.currentTimeMillis() - first).toInt())
     }
     // Also re-triggers if the underlying scroll history is missing (e.g. after
-    // a reset), not just during the first-ever 7 days since install.
+    // a reset), not just during the first-ever 7 days since install. These are
+    // different windows (7 days vs. 3 real days) with independent "day X of Y"
+    // framing, so keep them as a distinct pair rather than merging into one
+    // number — installDaysRemaining takes priority since it's the true
+    // first-run case, and scrollBaselineDaysRemaining only applies once that's
+    // done but history still doesn't exist.
     val scrollBaselineDaysRemaining by vm.scrollBaselineDaysRemaining.collectAsState()
-    val calibrationDaysRemaining = maxOf(installDaysRemaining, scrollBaselineDaysRemaining)
-    val isCalibrating = calibrationDaysRemaining > 0
+    val isCalibrating = installDaysRemaining > 0 || scrollBaselineDaysRemaining > 0
+    val calibrationDaysRemaining = if (installDaysRemaining > 0) installDaysRemaining else scrollBaselineDaysRemaining
+    val calibrationTotalDays     = if (installDaysRemaining > 0) 7 else 3
 
     Column(
         modifier = Modifier
@@ -80,7 +86,7 @@ fun HomeTab(vm: ScrollViewModel, onSettingsClick: () -> Unit) {
 
         // ── Hero: score ring or calibration ring ──────────────────────────────
         if (isCalibrating) {
-            CalibrationRingHero(daysRemaining = calibrationDaysRemaining)
+            CalibrationRingHero(daysRemaining = calibrationDaysRemaining, totalDays = calibrationTotalDays)
         } else {
             ScoreRingHero(
                 score          = wellnessScore,
@@ -118,7 +124,7 @@ fun HomeTab(vm: ScrollViewModel, onSettingsClick: () -> Unit) {
         } else {
             // During calibration the sub-metrics have no meaning yet, so show
             // the calibration progress card here instead.
-            CalibrationCard(daysRemaining = calibrationDaysRemaining)
+            CalibrationCard(daysRemaining = calibrationDaysRemaining, totalDays = calibrationTotalDays)
         }
 
         Spacer(Modifier.height(40.dp))
@@ -260,9 +266,9 @@ private fun ScoreRingHero(
 // ── Calibration ring (shown instead of score ring during the 7-day window) ───
 
 @Composable
-private fun CalibrationRingHero(daysRemaining: Int) {
-    val currentDay = (8 - daysRemaining).coerceIn(1, 7)
-    val progress   = currentDay / 7f
+private fun CalibrationRingHero(daysRemaining: Int, totalDays: Int = 7) {
+    val currentDay = (totalDays + 1 - daysRemaining).coerceIn(1, totalDays)
+    val progress   = currentDay / totalDays.toFloat()
 
     val animatedProgress by animateFloatAsState(
         targetValue   = progress,
@@ -301,7 +307,7 @@ private fun CalibrationRingHero(daysRemaining: Int) {
                     modifier           = Modifier.size(24.dp)
                 )
                 Text(
-                    "$currentDay/7",
+                    "$currentDay/$totalDays",
                     style         = MaterialTheme.typography.headlineMedium,
                     fontWeight    = FontWeight.ExtraBold,
                     color         = Blue,

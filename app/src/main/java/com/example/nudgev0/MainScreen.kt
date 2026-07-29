@@ -330,9 +330,9 @@ internal fun TabButton(
 // ── CalibrationCard ───────────────────────────────────────────────────────────
 
 @Composable
-fun CalibrationCard(daysRemaining: Int) {
-    val currentDay = 8 - daysRemaining
-    val progress   = (currentDay - 1) / 7f
+fun CalibrationCard(daysRemaining: Int, totalDays: Int = 7) {
+    val currentDay = (totalDays + 1 - daysRemaining).coerceIn(1, totalDays)
+    val progress   = (currentDay - 1) / totalDays.toFloat()
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape    = RoundedCornerShape(16.dp),
@@ -366,7 +366,7 @@ fun CalibrationCard(daysRemaining: Int) {
                 )
             }
             Text(
-                "Nudge is learning your natural habits. Controls unlock once we have your 7-day baseline.",
+                "Nudge is learning your natural habits. Controls unlock once we have your $totalDays-day baseline.",
                 style      = MaterialTheme.typography.bodySmall,
                 color      = MaterialTheme.colorScheme.onSurfaceVariant,
                 lineHeight = 18.sp
@@ -376,7 +376,7 @@ fun CalibrationCard(daysRemaining: Int) {
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    "Day $currentDay of 7",
+                    "Day $currentDay of $totalDays",
                     style      = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.SemiBold,
                     color      = MaterialTheme.colorScheme.primary

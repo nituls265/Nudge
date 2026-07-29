@@ -205,7 +205,13 @@ class ScrollViewModel(
                     .filter { it.date != today }
                     .map { it.count }
                     .filter { it >= 5 }   // ignore days with no meaningful usage
-                if (days.size < 3) 0f     // need at least 3 real days for a baseline
+                // Require the full 7-day window, not just a handful of days:
+                // weekday and weekend scroll behavior plausibly come from
+                // different distributions, so a partial sample (e.g. 3 days
+                // that happen to land on a weekend) can skew the "normal"
+                // baseline it's meant to represent. Only a full week
+                // guarantees both regimes are captured.
+                if (days.size < 7) 0f
                 else days.average().toFloat()
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0f)
@@ -215,7 +221,7 @@ class ScrollViewModel(
     // The 7-day calibration window in HomeTab/SettingsSheet is a one-time
     // check against install date, so it can't tell "brand new" apart from
     // "the underlying history got wiped" (e.g. a scroll-count reset during
-    // testing). This mirrors sevenDayScrollAvg's 3-real-day requirement but
+    // testing). This mirrors sevenDayScrollAvg's full-7-day requirement but
     // without the >=5-scroll filter, so a genuinely light usage day still
     // counts as "we have data" — it only flips back on when history rows are
     // actually missing, not just when usage is light.
@@ -225,9 +231,9 @@ class ScrollViewModel(
             .map { dbDays ->
                 val today = DayBoundary.today()
                 val validDays = dbDays.count { it.date != today }
-                maxOf(0, 3 - validDays)
+                maxOf(0, 7 - validDays)
             }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 3)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 7)
     }
 
     // ── Live wellness score ───────────────────────────────────────────────────

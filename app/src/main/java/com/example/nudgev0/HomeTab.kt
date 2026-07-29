@@ -59,16 +59,14 @@ fun HomeTab(vm: ScrollViewModel, onSettingsClick: () -> Unit) {
         maxOf(0, 7 - TimeUnit.MILLISECONDS.toDays(System.currentTimeMillis() - first).toInt())
     }
     // Also re-triggers if the underlying scroll history is missing (e.g. after
-    // a reset), not just during the first-ever 7 days since install. These are
-    // different windows (7 days vs. 3 real days) with independent "day X of Y"
-    // framing, so keep them as a distinct pair rather than merging into one
-    // number — installDaysRemaining takes priority since it's the true
-    // first-run case, and scrollBaselineDaysRemaining only applies once that's
-    // done but history still doesn't exist.
+    // a reset), not just during the first-ever 7 days since install. Both are
+    // full 7-day windows — installDaysRemaining takes priority since it's the
+    // true first-run case, scrollBaselineDaysRemaining applies once that's
+    // done but history still doesn't cover a full week.
     val scrollBaselineDaysRemaining by vm.scrollBaselineDaysRemaining.collectAsState()
     val isCalibrating = installDaysRemaining > 0 || scrollBaselineDaysRemaining > 0
     val calibrationDaysRemaining = if (installDaysRemaining > 0) installDaysRemaining else scrollBaselineDaysRemaining
-    val calibrationTotalDays     = if (installDaysRemaining > 0) 7 else 3
+    val calibrationTotalDays     = 7
 
     Column(
         modifier = Modifier

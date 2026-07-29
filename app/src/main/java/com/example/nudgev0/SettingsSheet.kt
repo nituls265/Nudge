@@ -37,12 +37,12 @@ fun SettingsSheet(vm: ScrollViewModel, onDismiss: () -> Unit) {
     }
     // Kept in sync with HomeTab's data-driven re-trigger — see
     // ScrollViewModel.scrollBaselineDaysRemaining for why this isn't purely
-    // install-date-based. Two distinct windows (7 days vs. 3 real days), so
-    // kept as a separate pair rather than merged into one number.
+    // install-date-based. Both are full 7-day windows, kept as a separate
+    // pair since the underlying reason differs even though the total matches.
     val scrollBaselineDaysRemaining by vm.scrollBaselineDaysRemaining.collectAsState()
     val isCalibrating = installDaysRemaining > 0 || scrollBaselineDaysRemaining > 0
     val calibrationDaysRemaining = if (installDaysRemaining > 0) installDaysRemaining else scrollBaselineDaysRemaining
-    val calibrationTotalDays     = if (installDaysRemaining > 0) 7 else 3
+    val calibrationTotalDays     = 7
 
     // Both overlay permission AND accessibility service must be granted for the
     // bubble to function. Check this here rather than in the VM so it reflects

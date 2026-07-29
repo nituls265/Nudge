@@ -251,12 +251,11 @@ object WellnessCalculator {
         val topPkg = topApps.firstOrNull()?.first ?: ""
         val appQuality = if (topPkg.isEmpty()) 15 else RiskyApps.classify(topPkg).pts
 
-        // Collect flagged app names from top-5 sources
-        val flaggedApps = topApps.take(5)
-            .map { it.first }
-            .filter { RiskyApps.packages.contains(it) }
-            .mapNotNull { RiskyApps.displayNames[it] }
-            .distinct()
+        // Only flag the app that actually set appQuality — naming a top-5 app
+        // that isn't topPkg would imply it caused the score when it didn't.
+        val flaggedApps = listOfNotNull(
+            topPkg.takeIf { RiskyApps.packages.contains(it) }?.let { RiskyApps.displayNames[it] }
+        )
 
         val total = (scrollVolume + sessionBehaviour + unlockFrequency + timeHygiene + appQuality)
             .coerceIn(0, 100)

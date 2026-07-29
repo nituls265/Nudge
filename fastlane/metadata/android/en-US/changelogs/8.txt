@@ -1,0 +1,1 @@
+Fixes browser scroll trays (e.g. Instagram Reels bar in Chrome) inflating your scroll count, and the app-quality score driver flagging apps that weren't actually driving it. Calibration now needs a full 7-day baseline and correctly re-shows if your scroll history goes missing, not just during install week. App version is now shown in Settings.

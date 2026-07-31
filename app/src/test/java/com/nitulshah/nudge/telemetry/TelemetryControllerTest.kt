@@ -33,6 +33,7 @@ class TelemetryControllerTest {
         private var firstOpenSent = false
         private var lastActiveDate: String? = null
         private val queue = mutableListOf<String>()
+        private val productQueue = mutableListOf<String>()
 
         override suspend fun isOptedIn() = optedIn
         override suspend fun setOptedIn(value: Boolean) { optedIn = value }
@@ -49,6 +50,9 @@ class TelemetryControllerTest {
         override suspend fun queuedEvents() = queue.toList()
         override suspend fun appendQueuedEvent(json: String) { queue.add(json) }
         override suspend fun clearQueue() { queue.clear() }
+        override suspend fun queuedProductEvents() = productQueue.toList()
+        override suspend fun appendQueuedProductEvent(json: String) { productQueue.add(json) }
+        override suspend fun clearProductEventQueue() { productQueue.clear() }
     }
 
     /** Mock sink. online=false simulates offline (POST fails, nothing delivered). */
@@ -57,6 +61,11 @@ class TelemetryControllerTest {
         var postCalls = 0; private set
         override suspend fun postEvents(jsonArrayBody: String): Boolean {
             postCalls++
+            if (!online) return false
+            sentBatches.add(jsonArrayBody)
+            return true
+        }
+        override suspend fun postProductEvents(jsonArrayBody: String): Boolean {
             if (!online) return false
             sentBatches.add(jsonArrayBody)
             return true

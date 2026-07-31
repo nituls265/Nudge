@@ -1,0 +1,129 @@
+package com.nitulshah.nudge.telemetry
+
+import android.content.Context
+import com.nitulshah.nudge.BuildConfig
+import com.nitulshah.nudge.telemetry.android.AndroidClock
+import com.nitulshah.nudge.telemetry.android.AndroidInstallIdGenerator
+import com.nitulshah.nudge.telemetry.android.DataStoreTelemetryStorage
+import com.nitulshah.nudge.telemetry.android.HttpUrlTransport
+import com.nitulshah.nudge.telemetry.core.TelemetryController
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+
+/**
+ * App-facing telemetry facade — the Android wiring of the platform-agnostic
+ * [TelemetryController]. A single instance per process.
+ *
+ * The UI observes [hasAnswered] (to decide whether to show the one-time consent
+ * prompt) and [optedIn] (for the Settings toggle). All sending is gated on opt-in
+ * inside the controller, so calling [onAppOpen] before consent is a safe no-op.
+ */
+object Telemetry {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private lateinit var appContext: Context
+    private lateinit var storage: DataStoreTelemetryStorage
+    private lateinit var controller: TelemetryController
+    @Volatile private var initialized = false
+
+    /** null = still loading from disk; false = prompt not yet answered. */
+    private val _hasAnswered = MutableStateFlow<Boolean?>(null)
+    val hasAnswered: StateFlow<Boolean?> = _hasAnswered.asStateFlow()
+
+    private val _optedIn = MutableStateFlow(false)
+    val optedIn: StateFlow<Boolean> = _optedIn.asStateFlow()
+
+    fun init(context: Context) {
+        // Builds without telemetry (e.g. foss) never initialize the controller —
+        // hasAnswered stays null forever, so the consent prompt never shows and
+        // onAppOpen()/optIn() stay safe no-ops (guarded by `initialized` below).
+        // Nothing is ever queued or sent.
+        if (!BuildConfig.ENABLE_TELEMETRY) return
+        if (initialized) return
+        synchronized(this) {
+            if (initialized) return
+            appContext = context.applicationContext
+            storage = DataStoreTelemetryStorage(appContext)
+            val version = runCatching {
+                appContext.packageManager.getPackageInfo(appContext.packageName, 0).versionName
+            }.getOrNull() ?: "unknown"
+            controller = TelemetryController(
+                storage      = storage,
+                transport    = HttpUrlTransport(TelemetryConfig.SUPABASE_URL, TelemetryConfig.SUPABASE_ANON_KEY),
+                clock        = AndroidClock(),
+                idGenerator  = AndroidInstallIdGenerator(),
+                appVersion   = version,
+                platform     = "android",
+            )
+            initialized = true
+        }
+        refreshState()
+    }
+
+    private fun refreshState() {
+        if (!initialized) return
+        scope.launch {
+            _hasAnswered.value = storage.hasAnsweredConsent()
+            _optedIn.value = storage.isOptedIn()
+        }
+    }
+
+    /** Call on each app open. No-op unless opted in. Schedules a retry if offline. */
+    fun onAppOpen() {
+        if (!initialized) return
+        scope.launch {
+            val allSent = controller.recordAppOpen()
+            if (!allSent && controller.isOptedIn()) {
+                TelemetryFlushWorker.enqueue(appContext)
+            }
+        }
+    }
+
+    /** User accepted the consent prompt / turned the Settings toggle on. */
+    fun optIn() {
+        if (!initialized) return
+        scope.launch {
+            controller.optIn()
+            refreshState()
+            if (!controller.flush() && controller.isOptedIn()) {
+                TelemetryFlushWorker.enqueue(appContext)
+            }
+        }
+    }
+
+    /** User declined / turned the toggle off. Deletes the local install ID. */
+    fun optOut() {
+        if (!initialized) return
+        scope.launch {
+            controller.optOut()
+            refreshState()
+        }
+    }
+
+    /** Used by the network-constrained flush worker. */
+    suspend fun flushNow(): Boolean {
+        if (!initialized) return false
+        val eventsOk = controller.flush()
+        val productEventsOk = controller.flushProductEvents()
+        return eventsOk && productEventsOk
+    }
+
+    /**
+     * Enqueue a product-analytics event (feature usage, intervention funnel).
+     * No-op unless opted in. [metadataJson] must be a valid JSON object string,
+     * e.g. `{"level":2}` — defaults to an empty object.
+     */
+    fun logProductEvent(eventType: String, metadataJson: String = "{}") {
+        if (!initialized) return
+        scope.launch {
+            controller.recordProductEvent(eventType, metadataJson)
+            if (!controller.flushProductEvents() && controller.isOptedIn()) {
+                TelemetryFlushWorker.enqueue(appContext)
+            }
+        }
+    }
+}

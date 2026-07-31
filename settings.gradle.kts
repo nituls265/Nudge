@@ -19,5 +19,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Nudgev0"
+rootProject.name = "Nudge"
 include(":app")

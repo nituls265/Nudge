@@ -68,7 +68,7 @@ Anything that survives all seven filters increments the counter, gets written to
 ## Project structure
 
 ```
-app/src/main/java/com/example/nudgev0/
+app/src/main/java/com/nitulshah/nudge/
 ├── MainActivity.kt              # Compose entry point, builds the ViewModel factory, schedules ResetWorker
 ├── MainScreen.kt                # Dashboard UI (cards, chart, controls, time chips)
 ├── ScrollViewModel.kt           # Bridges service flows + Room into chart data
@@ -183,7 +183,7 @@ the same way on both `dev` and `foss` builds.
 Events are queued locally and sent as a thin HTTPS POST (no SDK, plain
 `HttpURLConnection`/`fetch`); they work offline and flush when the network
 returns. The destination is configured in
-`app/src/main/java/com/example/nudgev0/telemetry/TelemetryConfig.kt` — if you
+`app/src/main/java/com/nitulshah/nudge/telemetry/TelemetryConfig.kt` — if you
 build from source with those values left blank, nothing is sent. **As shipped
 in this repository, those values point at the developer's own Supabase
 project** (not a per-user or self-hosted instance) — anyone building from this

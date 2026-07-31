@@ -13,5 +13,5 @@
 .externalNativeBuild
 .cxx
 /.mcp.json
-/.claude/worktrees/
+/.claude/
 local.properties

@@ -7,7 +7,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.nudgev0"
+    namespace = "com.nitulshah.nudge"
     compileSdk = 36
 
     defaultConfig {

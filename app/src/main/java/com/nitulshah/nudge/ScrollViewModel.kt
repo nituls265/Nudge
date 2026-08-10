@@ -3,6 +3,7 @@ package com.nitulshah.nudge
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.nitulshah.nudge.data.DateRange
 import com.nitulshah.nudge.data.DayBoundary
 import com.nitulshah.nudge.data.NudgeRepository
 import com.nitulshah.nudge.data.ScrollDay
@@ -26,36 +27,43 @@ class ScrollViewModel(
     private val _personalAvgFirstUnlockMinute = MutableStateFlow<Int?>(null)
 
     init {
-        // Backfill any past day in the calibration window missing a ScrollDay row —
-        // e.g. ResetWorker never ran that night (Doze / OEM battery killer). Without
-        // this, scrollBaselineDaysRemaining (below) can get stuck non-zero forever,
-        // since a missing row is otherwise never created retroactively.
-        viewModelScope.launch(Dispatchers.IO) { backfillMissingScrollDays() }
+        // Self-heal any past day in the trailing week missing a ScrollDay row —
+        // e.g. ResetWorker never ran that night (Doze / OEM battery killer). This
+        // is a data-completeness fix, not an onboarding one: it keeps things like
+        // sevenDayScrollAvg (below) accurate. It must NEVER be used to re-open the
+        // calibration gate — see CalibrationState's doc for why that gate is a pure
+        // function of install date alone.
+        viewModelScope.launch(Dispatchers.IO) {
+            val installDate = DayBoundary.keyOf(
+                appContext.getSharedPreferences(CalibrationPrefs.FILE_NAME, android.content.Context.MODE_PRIVATE)
+                    .getLong(CalibrationPrefs.KEY_FIRST_LAUNCH_DATE, System.currentTimeMillis())
+            )
+            val sevenDaysBack = DayBoundary.daysAgo(7)
+            // Never backfill before install — that history genuinely doesn't exist.
+            val startDate = if (installDate > sevenDaysBack) installDate else sevenDaysBack
+            try {
+                repo.backfillMissingScrollDays(startDate, DayBoundary.today())
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
         // Backfill wellness scores for any past day that has scroll data but no wellness entry.
         // Handles the case where ResetWorker was delayed by Doze / battery optimisation.
         viewModelScope.launch(Dispatchers.IO) { backfillMissingWellnessScores() }
-        // Diagnostic only (Logcat tag "Calibration") — not shown in the UI. Logs
-        // which of the two calibration counters is currently holding the window
-        // open, so "still calibrating long after install" is debuggable from a
-        // bug report without exposing the two-counter mechanism to the user.
+        // Diagnostic only (Logcat tag "Calibration") — not shown in the UI. Logs the
+        // data-completeness signal alongside the real (install-date) gate so "still
+        // calibrating long after install" is debuggable from a bug report, without
+        // that signal ever controlling what the user sees.
         viewModelScope.launch(Dispatchers.IO) {
             scrollBaselineDaysRemaining
                 .distinctUntilChanged()
                 .collect { scrollRemaining ->
-                    val prefs = appContext.getSharedPreferences("NudgePrefs", android.content.Context.MODE_PRIVATE)
-                    val firstLaunchMs = prefs.getLong("FIRST_LAUNCH_DATE", System.currentTimeMillis())
-                    val installRemaining = maxOf(
-                        0,
-                        7 - java.util.concurrent.TimeUnit.MILLISECONDS.toDays(
-                            System.currentTimeMillis() - firstLaunchMs
-                        ).toInt()
-                    )
-                    if (installRemaining > 0 || scrollRemaining > 0) {
-                        val blockedBy = if (installRemaining > 0) "install" else "scrollHistory"
+                    val install = readCalibrationState(appContext)
+                    if (install.isCalibrating || scrollRemaining > 0) {
                         android.util.Log.d(
                             "Calibration",
-                            "installDaysRemaining=$installRemaining " +
-                                "scrollBaselineDaysRemaining=$scrollRemaining blockedBy=$blockedBy"
+                            "installDaysRemaining=${install.daysRemaining} " +
+                                "scrollHistoryGapDays=$scrollRemaining"
                         )
                     }
                 }
@@ -248,14 +256,14 @@ class ScrollViewModel(
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0f)
     }
 
-    // ── Data-driven calibration re-trigger ────────────────────────────────────
-    // The 7-day calibration window in HomeTab/SettingsSheet is a one-time
-    // check against install date, so it can't tell "brand new" apart from
-    // "the underlying history got wiped" (e.g. a scroll-count reset during
-    // testing). This mirrors sevenDayScrollAvg's full-7-day requirement but
-    // without the >=5-scroll filter, so a genuinely light usage day still
-    // counts as "we have data" — it only flips back on when history rows are
-    // actually missing, not just when usage is light.
+    // ── Scroll-history gap diagnostic (internal — never gates the UI) ─────────
+    // Counts how many of the trailing 7 days are missing a ScrollDay row, before
+    // the startup backfill (above) has a chance to run. Exposed only so init{}
+    // can log it — see that block's comment for why this must never re-open the
+    // calibration gate, which is a pure function of install date alone
+    // (CalibrationState). Mirrors sevenDayScrollAvg's full-7-day requirement but
+    // without the >=5-scroll filter, so a genuinely light usage day still counts
+    // as "we have data".
     val scrollBaselineDaysRemaining: StateFlow<Int> = run {
         val startDate = DayBoundary.daysAgo(7)
         repo.scrollHistorySince(startDate)
@@ -487,39 +495,6 @@ class ScrollViewModel(
         return "${fmt.format(start.time)} – ${fmt.format(end.time)}"
     }
 
-    // ── Scroll-day backfill ───────────────────────────────────────────────────
-    // scrollBaselineDaysRemaining (above) only counts a day as "covered" once a
-    // ScrollDay row exists for it. That row is normally written by ResetWorker at
-    // midnight — if the worker never fires for a given night (Doze, an OEM battery
-    // killer, the phone being off), the row is permanently missing and the
-    // calibration window can never close, even though the user genuinely used the
-    // app that day. We can't recover the true count for a missed day, so we record
-    // it as 0 (same as a real zero-usage day) rather than leave a hole that blocks
-    // calibration indefinitely.
-
-    private suspend fun backfillMissingScrollDays() {
-        val today = DayBoundary.today()
-        val prefs = appContext.getSharedPreferences("NudgePrefs", android.content.Context.MODE_PRIVATE)
-        val installDate = DayBoundary.keyOf(prefs.getLong("FIRST_LAUNCH_DATE", System.currentTimeMillis()))
-        val sevenDaysBack = DayBoundary.daysAgo(7)
-        // Never backfill before install — that history genuinely doesn't exist.
-        val startDate = if (installDate > sevenDaysBack) installDate else sevenDaysBack
-
-        try {
-            val existingDates = repo.scrollHistorySince(startDate).firstOrNull()
-                ?.map { it.date }?.toSet() ?: emptySet()
-
-            val missing = generateSequence(startDate) { DayBoundary.shift(it, 1) }
-                .takeWhile { it <= today }
-                .filter { it != today && it !in existingDates }
-                .toList()
-
-            missing.forEach { date -> repo.upsertScrollDay(ScrollDay(date, 0)) }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-
     // ── Wellness backfill ─────────────────────────────────────────────────────
     // Runs once on startup. If ResetWorker was delayed or skipped entirely (Doze,
     // battery optimisation, device powered off, app not open at midnight), any past
@@ -537,13 +512,10 @@ class ScrollViewModel(
             val wellnessDates = repo.wellnessHistorySince(thirtyDaysBack).firstOrNull()
                                ?.map { it.date }?.toSet() ?: emptySet()
 
-            // Walk every date in the window, not just dates with an existing ScrollDay
-            // row — a day with zero phone usage never gets one, but still needs a score.
-            val allDates = generateSequence(thirtyDaysBack) { DayBoundary.shift(it, 1) }
-                .takeWhile { it <= today }
-
-            // Only backfill past days (not today — live score handles today)
-            val missing = allDates.filter { it != today && it !in wellnessDates }.toList()
+            // Every date in [thirtyDaysBack, today) without a wellness row — a day with
+            // zero phone usage never gets a ScrollDay row either, but still needs a score.
+            // (today is excluded by the range itself: the live score handles today.)
+            val missing = DateRange.missingDates(wellnessDates, thirtyDaysBack, today)
             if (missing.isEmpty()) return
 
             for (date in missing) {

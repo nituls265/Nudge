@@ -3,6 +3,7 @@ package com.nitulshah.nudge.data
 import android.content.Context
 import androidx.room.withTransaction
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 
 /**
  * Single coordination point for all persistence.
@@ -91,6 +92,26 @@ class NudgeRepository private constructor(private val db: ScrollDatabase) {
     suspend fun upsertScrollDay(day: ScrollDay)     = scrollDao.insertOrUpdate(day)
     suspend fun upsertUnlockDay(day: UnlockDay)     = unlockDao.insertOrUpdate(day)
     suspend fun upsertWellnessDay(day: WellnessDay) = wellnessDao.insertOrUpdate(day)
+
+    /**
+     * Ensures every date in `[startDate, endDateExclusive)` has a persisted
+     * ScrollDay row, inserting a zero-count row for any that are missing.
+     *
+     * The only normal writer of a day's row is ResetWorker firing at midnight.
+     * If it misses a night — Doze, an OEM battery manager, the phone being off
+     * — that day is otherwise silently absent from scroll_history forever,
+     * which throws off anything that requires a full N-day window (e.g. the
+     * 7-day scroll baseline). We can't recover the true count for a missed
+     * day, so we record it as 0, identical to a real zero-usage day.
+     *
+     * Idempotent and safe to call on every app start — the query and inserts
+     * are cheap, and a day that already has a row is left untouched.
+     */
+    suspend fun backfillMissingScrollDays(startDate: String, endDateExclusive: String) {
+        val existing = scrollDao.getHistorySince(startDate).first().map { it.date }.toSet()
+        DateRange.missingDates(existing, startDate, endDateExclusive)
+            .forEach { date -> scrollDao.insertOrUpdate(ScrollDay(date, 0)) }
+    }
 
     suspend fun deleteScrollHoursForDate(date: String) = scrollDao.deleteHoursForDate(date)
 

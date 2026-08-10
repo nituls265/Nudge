@@ -100,8 +100,8 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun recordFirstLaunchDate() {
-        val prefs = getSharedPreferences("NudgePrefs", Context.MODE_PRIVATE)
-        if (!prefs.contains("FIRST_LAUNCH_DATE")) {
+        val prefs = getSharedPreferences(CalibrationPrefs.FILE_NAME, Context.MODE_PRIVATE)
+        if (!prefs.contains(CalibrationPrefs.KEY_FIRST_LAUNCH_DATE)) {
             // The old code hard-coded an 8-day backdate for ALL builds, which
             // silently disabled the 7-day calibration period for every real
             // user. Now only DEBUG builds skip calibration (developer convenience
@@ -113,7 +113,7 @@ class MainActivity : ComponentActivity() {
             } else {
                 System.currentTimeMillis()                              // real baseline
             }
-            prefs.edit().putLong("FIRST_LAUNCH_DATE", firstLaunch).apply()
+            prefs.edit().putLong(CalibrationPrefs.KEY_FIRST_LAUNCH_DATE, firstLaunch).apply()
         }
     }
 

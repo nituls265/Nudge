@@ -27,7 +27,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import java.util.concurrent.TimeUnit
 import kotlin.math.abs
 
 // ── HomeTab ───────────────────────────────────────────────────────────────────
@@ -52,21 +51,13 @@ fun HomeTab(vm: ScrollViewModel, onSettingsClick: () -> Unit) {
     val screenTimeMin    by vm.todayScreenTimeMin.collectAsState()
 
     // Calibration state — read once per composition; SharedPrefs is fast and
-    // this value only changes at midnight, so remember is correct here.
-    val installDaysRemaining = remember {
-        val prefs = context.getSharedPreferences("NudgePrefs", android.content.Context.MODE_PRIVATE)
-        val first = prefs.getLong("FIRST_LAUNCH_DATE", System.currentTimeMillis())
-        maxOf(0, 7 - TimeUnit.MILLISECONDS.toDays(System.currentTimeMillis() - first).toInt())
-    }
-    // Also re-triggers if the underlying scroll history is missing (e.g. after
-    // a reset), not just during the first-ever 7 days since install. Both are
-    // full 7-day windows — installDaysRemaining takes priority since it's the
-    // true first-run case, scrollBaselineDaysRemaining applies once that's
-    // done but history still doesn't cover a full week.
-    val scrollBaselineDaysRemaining by vm.scrollBaselineDaysRemaining.collectAsState()
-    val isCalibrating = installDaysRemaining > 0 || scrollBaselineDaysRemaining > 0
-    val calibrationDaysRemaining = if (installDaysRemaining > 0) installDaysRemaining else scrollBaselineDaysRemaining
-    val calibrationTotalDays     = 7
+    // this value only changes at midnight, so remember is correct here. This is
+    // the single source of truth for the onboarding gate — see CalibrationState's
+    // doc for why nothing else (e.g. usage-history gaps) is allowed to affect it.
+    val calibration = remember { readCalibrationState(context) }
+    val isCalibrating           = calibration.isCalibrating
+    val calibrationDaysRemaining = calibration.daysRemaining
+    val calibrationTotalDays     = calibration.totalDays
 
     Column(
         modifier = Modifier

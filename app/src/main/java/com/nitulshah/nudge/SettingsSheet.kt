@@ -14,7 +14,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nitulshah.nudge.telemetry.Telemetry
-import java.util.concurrent.TimeUnit
 
 // ── SettingsSheet ─────────────────────────────────────────────────────────────
 // Presented as a ModalBottomSheet so it slides up over whatever tab is active.
@@ -29,20 +28,13 @@ fun SettingsSheet(vm: ScrollViewModel, onDismiss: () -> Unit) {
     val isPaused        by vm.isPaused.collectAsState()
     val syncCode        by vm.syncCode.collectAsState()
 
-    // Read calibration state once — same SharedPrefs trick as HomeTab
-    val installDaysRemaining = remember {
-        val prefs = context.getSharedPreferences("NudgePrefs", android.content.Context.MODE_PRIVATE)
-        val first = prefs.getLong("FIRST_LAUNCH_DATE", System.currentTimeMillis())
-        maxOf(0, 7 - TimeUnit.MILLISECONDS.toDays(System.currentTimeMillis() - first).toInt())
-    }
-    // Kept in sync with HomeTab's data-driven re-trigger — see
-    // ScrollViewModel.scrollBaselineDaysRemaining for why this isn't purely
-    // install-date-based. Both are full 7-day windows, kept as a separate
-    // pair since the underlying reason differs even though the total matches.
-    val scrollBaselineDaysRemaining by vm.scrollBaselineDaysRemaining.collectAsState()
-    val isCalibrating = installDaysRemaining > 0 || scrollBaselineDaysRemaining > 0
-    val calibrationDaysRemaining = if (installDaysRemaining > 0) installDaysRemaining else scrollBaselineDaysRemaining
-    val calibrationTotalDays     = 7
+    // Read calibration state once — same helper HomeTab uses, so both surfaces
+    // always agree. See CalibrationState's doc for why install date is the only
+    // input: it's what guarantees this can never get stuck open.
+    val calibration = remember { readCalibrationState(context) }
+    val isCalibrating            = calibration.isCalibrating
+    val calibrationDaysRemaining = calibration.daysRemaining
+    val calibrationTotalDays     = calibration.totalDays
 
     // Both overlay permission AND accessibility service must be granted for the
     // bubble to function. Check this here rather than in the VM so it reflects

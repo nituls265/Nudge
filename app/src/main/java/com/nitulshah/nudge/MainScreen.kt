@@ -31,13 +31,10 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
-import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
@@ -49,6 +46,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nitulshah.nudge.data.ScrollDay
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.math.abs
@@ -74,10 +72,8 @@ val Slate700 = Color(0xFF334155)
 val Slate500 = Color(0xFF64748B)
 val Slate400 = Color(0xFF94A3B8)
 
-// Retired as active accents — kept so tier-scale references compile unchanged.
-// Blue = tier-balanced (70–84), Purple was metric-time (now MetricTime).
+// Retired as active accents — Blue = tier-balanced (70–84).
 val Blue   = Color(0xFF60A5FA) // tier-balanced only
-val Purple = MetricTime        // compat shim → MetricTime
 
 // ── Navigation ────────────────────────────────────────────────────────────────
 
@@ -105,7 +101,6 @@ fun MainScreen(factory: ScrollViewModelFactory) {
         bottomBar      = {
             BottomNavBar(
                 selectedTab  = selectedTab,
-                settleOffset = pagerState.currentPageOffsetFraction,
                 onSelect     = { tab ->
                     scope.launch {
                         pagerState.animateScrollToPage(
@@ -157,7 +152,6 @@ fun MainScreen(factory: ScrollViewModelFactory) {
 @Composable
 internal fun BottomNavBar(
     selectedTab: AppTab,
-    settleOffset: Float,        // pagerState.currentPageOffsetFraction for live tracking
     onSelect: (AppTab) -> Unit
 ) {
     Surface(

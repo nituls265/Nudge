@@ -1,6 +1,6 @@
 # Builds, signs and publishes the foss release APK from the exact commit it
-# runs on, so the GitHub Release binary always matches the commit pinned in
-# the F-Droid recipe (required for F-Droid's reproducible-build check).
+# runs on (or `ref`), so the GitHub Release binary always matches the commit
+# pinned in the F-Droid recipe (required for F-Droid's reproducible-build check).
 #
 # Required repo secrets: NUDGE_KEYSTORE_BASE64, NUDGE_KEYSTORE_PASSWORD,
 # NUDGE_KEY_ALIAS, NUDGE_KEY_PASSWORD.
@@ -12,6 +12,9 @@ on:
       version:
         description: "versionName to release (e.g. 1.6); must match app/build.gradle.kts"
         required: true
+      ref:
+        description: "Commit or tag to build (default: the commit this runs on). Set to an existing release's tag to re-sign its APK."
+        required: false
   push:
     tags:
       - "v*"
@@ -27,6 +30,11 @@ jobs:
       EXPECTED_CERT_SHA256: ea386056c01f66c3ff6c77e288e19b9972e76e25d3662c43f26a91b84fea6edf
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+
+      - name: Record built commit
+        run: echo "BUILD_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
       - uses: actions/setup-java@v4
         with:
@@ -63,7 +71,11 @@ jobs:
           echo "$KEYSTORE_BASE64" | base64 -d > "$KEYSTORE"
 
           UNSIGNED=$(ls app/build/outputs/apk/foss/release/*-unsigned.apk)
+          # Keep Gradle's zip layout and skip v1 (minSdk 24 doesn't need it):
+          # F-Droid copies only the signature onto its own unsigned build, so
+          # any re-alignment or v1 META-INF files would break the copy.
           "$BUILD_TOOLS/apksigner" sign \
+            --alignment-preserved true --v1-signing-enabled false \
             --ks "$KEYSTORE" --ks-pass env:KEYSTORE_PASSWORD \
             --ks-key-alias "$KEY_ALIAS" --key-pass env:KEY_PASSWORD \
             --out app-foss-release.apk "$UNSIGNED"
@@ -75,11 +87,30 @@ jobs:
             exit 1
           fi
 
+          # Same check F-Droid runs: copying our signature onto the unsigned
+          # build must reproduce the signed APK byte for byte.
+          pipx run --spec apksigcopier==1.1.1 apksigcopier copy \
+            app-foss-release.apk "$UNSIGNED" "$RUNNER_TEMP/sigcopy.apk"
+          if ! cmp -s app-foss-release.apk "$RUNNER_TEMP/sigcopy.apk"; then
+            echo "::error::Signature does not copy onto the unsigned APK; F-Droid verification would fail"
+            exit 1
+          fi
+
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          if gh release view "v$VERSION" > /dev/null 2>&1; then
+            # Re-signing an existing release: only allowed from its tagged commit.
+            TAG_SHA=$(gh api "repos/$GITHUB_REPOSITORY/commits/v$VERSION" --jq .sha)
+            if [ "$TAG_SHA" != "$BUILD_SHA" ]; then
+              echo "::error::v$VERSION is tagged at $TAG_SHA but this build is $BUILD_SHA"
+              exit 1
+            fi
+            gh release upload "v$VERSION" app-foss-release.apk --clobber
+            exit 0
+          fi
           gh release create "v$VERSION" app-foss-release.apk \
-            --target "$GITHUB_SHA" \
+            --target "$BUILD_SHA" \
             --title "Nudge $VERSION" \
             --notes-file fastlane/metadata/android/en-US/changelogs/$(sed -n 's/^ *versionCode = \([0-9]*\)/\1/p' app/build.gradle.kts).txt

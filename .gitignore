@@ -15,3 +15,8 @@
 /.mcp.json
 /.claude/
 local.properties
+
+# Local release build outputs (signed APKs/AABs) — never commit; F-Droid rejects binaries in source
+/app/release/
+*.apk
+*.aab

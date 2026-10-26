@@ -1,0 +1,85 @@
+# Builds, signs and publishes the foss release APK from the exact commit it
+# runs on, so the GitHub Release binary always matches the commit pinned in
+# the F-Droid recipe (required for F-Droid's reproducible-build check).
+#
+# Required repo secrets: NUDGE_KEYSTORE_BASE64, NUDGE_KEYSTORE_PASSWORD,
+# NUDGE_KEY_ALIAS, NUDGE_KEY_PASSWORD.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "versionName to release (e.g. 1.6); must match app/build.gradle.kts"
+        required: true
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      # Must match AllowedAPKSigningKeys in the F-Droid recipe.
+      EXPECTED_CERT_SHA256: ea386056c01f66c3ff6c77e288e19b9972e76e25d3662c43f26a91b84fea6edf
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Resolve and check version
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="${{ inputs.version }}"
+          fi
+          GRADLE_VERSION=$(sed -n 's/^ *versionName = "\(.*\)"/\1/p' app/build.gradle.kts)
+          if [ "$VERSION" != "$GRADLE_VERSION" ]; then
+            echo "::error::Release version $VERSION does not match versionName $GRADLE_VERSION"
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Test and build unsigned foss release
+        run: ./gradlew --no-daemon clean testFossDebugUnitTest assembleFossRelease
+
+      - name: Sign and verify
+        env:
+          KEYSTORE_BASE64: ${{ secrets.NUDGE_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.NUDGE_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.NUDGE_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.NUDGE_KEY_PASSWORD }}
+        run: |
+          BUILD_TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          KEYSTORE="$RUNNER_TEMP/release.keystore"
+          trap 'rm -f "$KEYSTORE"' EXIT
+          echo "$KEYSTORE_BASE64" | base64 -d > "$KEYSTORE"
+
+          UNSIGNED=$(ls app/build/outputs/apk/foss/release/*-unsigned.apk)
+          "$BUILD_TOOLS/apksigner" sign \
+            --ks "$KEYSTORE" --ks-pass env:KEYSTORE_PASSWORD \
+            --ks-key-alias "$KEY_ALIAS" --key-pass env:KEY_PASSWORD \
+            --out app-foss-release.apk "$UNSIGNED"
+
+          CERTS=$("$BUILD_TOOLS/apksigner" verify --print-certs app-foss-release.apk)
+          echo "$CERTS"
+          if ! echo "$CERTS" | grep -q "SHA-256 digest: $EXPECTED_CERT_SHA256"; then
+            echo "::error::Signing certificate does not match AllowedAPKSigningKeys"
+            exit 1
+          fi
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v$VERSION" app-foss-release.apk \
+            --target "$GITHUB_SHA" \
+            --title "Nudge $VERSION" \
+            --notes-file fastlane/metadata/android/en-US/changelogs/$(sed -n 's/^ *versionCode = \([0-9]*\)/\1/p' app/build.gradle.kts).txt

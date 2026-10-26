@@ -56,7 +56,6 @@ class ScrollViewModel(
         // that signal ever controlling what the user sees.
         viewModelScope.launch(Dispatchers.IO) {
             scrollBaselineDaysRemaining
-                .distinctUntilChanged()
                 .collect { scrollRemaining ->
                     val install = readCalibrationState(appContext)
                     if (install.isCalibrating || scrollRemaining > 0) {

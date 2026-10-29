@@ -1,0 +1,1 @@
+Enable R8 code shrinking for release builds, reducing APK size.

@@ -5,6 +5,15 @@
 # For more details, see
 #   http://developer.android.com/guide/developing/tools/proguard.html
 
+# Room: keep entity and DAO classes
+-keep class com.nitulshah.nudge.data.** { *; }
+
+# Keep the AccessibilityService so the system can bind to it
+-keep class com.nitulshah.nudge.MyAccessibilityService { *; }
+
+# Keep WorkManager workers
+-keep class com.nitulshah.nudge.ResetWorker { *; }
+
 # If your project uses WebView with JS, uncomment the following
 # and specify the fully qualified class name to the JavaScript interface
 # class:

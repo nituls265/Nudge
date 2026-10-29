@@ -8,11 +8,11 @@ A draggable floating bubble shows the live count on top of whatever app you're u
 >
 > No proprietary Google SDKs (Firebase, Play Services, etc.) — F-Droid compatible.
 > Submitted at [MR !44067](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/44067)
-> for [v1.6](https://github.com/nituls265/Nudge/releases/tag/v1.6); awaiting review, not yet live.
+> for [v1.7](https://github.com/nituls265/Nudge/releases/tag/v1.7); awaiting review, not yet live.
 >
 > [<img src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png" alt="Get it on F-Droid" height="45">](https://f-droid.org/packages/com.nitulshah.nudge/)
 >
-> Last documented: 2026-07-27
+> Last documented: 2026-10-29
 
 ## Features
 
@@ -32,6 +32,7 @@ A draggable floating bubble shows the live count on top of whatever app you're u
 - WorkManager for the daily reset job
 - Supabase (Postgres + PostgREST) for opt-in telemetry and laptop-sync — plain HTTPS calls, no SDK
 - Gradle Kotlin DSL, kapt, version catalog (`gradle/libs.versions.toml`)
+- R8 code and resource shrinking enabled for release builds (keep rules in `app/proguard-rules.pro`)
 - minSdk 24, targetSdk 36, Java 11
 
 ## How it works

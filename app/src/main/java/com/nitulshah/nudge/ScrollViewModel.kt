@@ -50,23 +50,6 @@ class ScrollViewModel(
         // Backfill wellness scores for any past day that has scroll data but no wellness entry.
         // Handles the case where ResetWorker was delayed by Doze / battery optimisation.
         viewModelScope.launch(Dispatchers.IO) { backfillMissingWellnessScores() }
-        // Diagnostic only (Logcat tag "Calibration") — not shown in the UI. Logs the
-        // data-completeness signal alongside the real (install-date) gate so "still
-        // calibrating long after install" is debuggable from a bug report, without
-        // that signal ever controlling what the user sees.
-        viewModelScope.launch(Dispatchers.IO) {
-            scrollBaselineDaysRemaining
-                .collect { scrollRemaining ->
-                    val install = readCalibrationState(appContext)
-                    if (install.isCalibrating || scrollRemaining > 0) {
-                        android.util.Log.d(
-                            "Calibration",
-                            "installDaysRemaining=${install.daysRemaining} " +
-                                "scrollHistoryGapDays=$scrollRemaining"
-                        )
-                    }
-                }
-        }
         // Yesterday's last-unlock time and the personal first-unlock baseline are both
         // fixed for the whole day (nothing before today changes intraday), so one-shot
         // fetches are enough — no need for reactive flows.
@@ -436,6 +419,28 @@ class ScrollViewModel(
     val overallDelta: StateFlow<Int?> = combine(wellnessScore, overallAverage) { live, avg ->
         avg?.let { live.total - it }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    // Declared after scrollBaselineDaysRemaining on purpose: a coroutine launched from
+    // the earlier init block can read it before it is assigned.
+    init {
+        // Diagnostic only (Logcat tag "Calibration") — not shown in the UI. Logs the
+        // data-completeness signal alongside the real (install-date) gate so "still
+        // calibrating long after install" is debuggable from a bug report, without
+        // that signal ever controlling what the user sees.
+        viewModelScope.launch(Dispatchers.IO) {
+            scrollBaselineDaysRemaining
+                .collect { scrollRemaining ->
+                    val install = readCalibrationState(appContext)
+                    if (install.isCalibrating || scrollRemaining > 0) {
+                        android.util.Log.d(
+                            "Calibration",
+                            "installDaysRemaining=${install.daysRemaining} " +
+                                "scrollHistoryGapDays=$scrollRemaining"
+                        )
+                    }
+                }
+        }
+    }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 

@@ -36,7 +36,7 @@ class MainActivity : ComponentActivity() {
         // state; nothing is sent until the user opts in via the consent prompt.
         Telemetry.init(applicationContext)
 
-        // Generates the Sync Code used to link the Chrome extension
+        // Loads the Sync Code if the user enabled Chrome-extension sync (off by default)
         lifecycleScope.launch {
             SyncManager.init(applicationContext)
         }

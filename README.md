@@ -8,7 +8,7 @@ A draggable floating bubble shows the live count on top of whatever app you're u
 >
 > No proprietary Google SDKs (Firebase, Play Services, etc.) — F-Droid compatible.
 > Submitted at [MR !44067](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/44067)
-> for [v1.7](https://github.com/nituls265/Nudge/releases/tag/v1.7); awaiting review, not yet live.
+> for [v1.8](https://github.com/nituls265/Nudge/releases/tag/v1.8); awaiting review, not yet live.
 >
 > [<img src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png" alt="Get it on F-Droid" height="45">](https://f-droid.org/packages/com.nitulshah.nudge/)
 >
@@ -138,10 +138,11 @@ per-user "bring your own backend" — see below):
 1. **Opt-in analytics** (retention + product usage) — off by default, and
    compiled out entirely (not just toggled off) in `foss`-flavor builds,
    including the one published to F-Droid.
-2. **Laptop-sync** (the Chrome extension pairing feature) — not gated by the
-   analytics opt-in or the flavor; it sends data whenever you pair a Sync
-   Code, on both `dev` and `foss` builds. Not pairing the extension is
-   the opt-out (see [Laptop-sync](#laptop-sync-chrome-extension) below).
+2. **Laptop-sync** (the Chrome extension pairing feature) — off by default
+   and separate from the analytics opt-in; it is available on both `dev` and
+   `foss` builds. Nothing is generated, polled or sent until you switch it on
+   under **Settings → Chrome Extension Sync**, and switching it off deletes the
+   Sync Code (see [Laptop-sync](#laptop-sync-chrome-extension) below).
 
 ### Opt-in analytics
 
@@ -171,13 +172,14 @@ Uninstalling or clearing app data also removes the ID.
 
 ### Laptop-sync (Chrome extension)
 
-If you pair the Chrome extension with the Sync Code shown under **Settings →
-Chrome Extension Sync**, your laptop's scroll counts — including which
+Laptop-sync is off by default. If you switch it on under **Settings → Chrome
+Extension Sync** and pair the Chrome extension with the Sync Code shown there, your laptop's scroll counts — including which
 tracked-site **domains** you scrolled on (e.g. `reddit.com`) — are sent to a
 `sync_state` table on the same Supabase project, keyed by that Sync Code
-rather than the anonymous analytics ID. There is no separate opt-out toggle
-for this in the app; not pairing the extension is the opt-out. This works
-the same way on both `dev` and `foss` builds.
+rather than the anonymous analytics ID. While it is on, the app also polls that
+table every few seconds. Switching it off in the same place stops all of that
+and deletes the Sync Code. This works the same way on both `dev` and `foss`
+builds.
 
 ### How it works / self-hosting
 

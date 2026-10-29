@@ -1,0 +1,1 @@
+Fixes a crash on launch that affected some devices. Chrome extension sync is now off by default and only contacts the server after you switch it on in Settings.

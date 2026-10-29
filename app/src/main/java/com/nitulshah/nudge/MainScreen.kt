@@ -440,12 +440,29 @@ internal fun LaptopSyncCard(syncCode: String, context: Context) {
                 )
             }
             Spacer(Modifier.height(6.dp))
-            Text(
-                "Paste this code in the Nudge Chrome extension to sync laptop scrolls.",
-                style      = MaterialTheme.typography.bodySmall,
-                color      = Slate500,
-                lineHeight = 18.sp
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    if (BuildConfig.ENABLE_CLOUD_FEATURES)
+                        "Off by default. When on, Nudge creates a Sync Code and contacts the " +
+                            "developer's Supabase server every few seconds. Paste the code in " +
+                            "the Nudge Chrome extension to sync laptop scrolls."
+                    else "Not available in this build.",
+                    modifier   = Modifier.weight(1f),
+                    style      = MaterialTheme.typography.bodySmall,
+                    color      = Slate500,
+                    lineHeight = 18.sp
+                )
+                if (BuildConfig.ENABLE_CLOUD_FEATURES) {
+                    Spacer(Modifier.width(12.dp))
+                    Switch(
+                        checked         = syncCode != "—",
+                        onCheckedChange = { on ->
+                            if (on) SyncManager.enable(context) else SyncManager.disable(context)
+                        }
+                    )
+                }
+            }
+            if (syncCode != "—") {
             Spacer(Modifier.height(12.dp))
             Row(
                 modifier = Modifier
@@ -456,9 +473,7 @@ internal fun LaptopSyncCard(syncCode: String, context: Context) {
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    if (syncCode != "—") syncCode.chunked(4).joinToString("  ")
-                    else if (BuildConfig.ENABLE_CLOUD_FEATURES) "Loading…"
-                    else "Not available in this build",
+                    syncCode.chunked(4).joinToString("  "),
                     style         = MaterialTheme.typography.titleMedium,
                     fontWeight    = FontWeight.Bold,
                     letterSpacing = 2.sp,
@@ -484,6 +499,7 @@ internal fun LaptopSyncCard(syncCode: String, context: Context) {
                         color      = if (copied) Green else Teal
                     )
                 }
+            }
             }
         }
     }

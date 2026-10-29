@@ -6,10 +6,13 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -42,54 +45,75 @@ object SyncManager {
 
     private const val POLL_INTERVAL_MS = 5_000L
     private const val PREFS_KEY_SYNC_ID = "NUDGE_SYNC_ID"
+    private const val PREFS_KEY_SYNC_ENABLED = "NUDGE_SYNC_ENABLED"
+    private const val NO_CODE = "—"
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    private val _syncCodeFlow = MutableStateFlow("—")
+    private val _syncCodeFlow = MutableStateFlow(NO_CODE)
     val syncCodeFlow: StateFlow<String> = _syncCodeFlow
 
-    /** Generates the local Sync Code on first call; otherwise just loads it. */
+    private fun prefs(context: Context) =
+        context.getSharedPreferences("NudgePrefs", Context.MODE_PRIVATE)
+
+    /**
+     * Sync is off until the user turns it on in Settings: no Sync Code is
+     * generated and nothing is polled or sent before that.
+     */
     fun init(context: Context) {
         if (!BuildConfig.ENABLE_CLOUD_FEATURES) return
-        val prefs = context.getSharedPreferences("NudgePrefs", Context.MODE_PRIVATE)
-        var id = prefs.getString(PREFS_KEY_SYNC_ID, null)
-        if (id == null) {
-            id = UUID.randomUUID().toString().replace("-", "").take(12).uppercase()
-            prefs.edit().putString(PREFS_KEY_SYNC_ID, id).apply()
-        }
+        _syncCodeFlow.value = getSyncId(context) ?: NO_CODE
+    }
+
+    fun enable(context: Context) {
+        if (!BuildConfig.ENABLE_CLOUD_FEATURES) return
+        val p = prefs(context)
+        val id = p.getString(PREFS_KEY_SYNC_ID, null)
+            ?: UUID.randomUUID().toString().replace("-", "").take(12).uppercase()
+        p.edit().putBoolean(PREFS_KEY_SYNC_ENABLED, true).putString(PREFS_KEY_SYNC_ID, id).apply()
         _syncCodeFlow.value = id
     }
 
-    // ── Sync Code: shown in the app and pasted into the extension ────────────
-    fun getSyncCode(context: Context): String =
-        context.getSharedPreferences("NudgePrefs", Context.MODE_PRIVATE)
-            .getString(PREFS_KEY_SYNC_ID, null) ?: "—"
+    /** Stops all sync traffic and forgets the local Sync Code. */
+    fun disable(context: Context) {
+        prefs(context).edit().putBoolean(PREFS_KEY_SYNC_ENABLED, false).remove(PREFS_KEY_SYNC_ID).apply()
+        _syncCodeFlow.value = NO_CODE
+    }
 
-    private fun getSyncId(context: Context): String? =
-        context.getSharedPreferences("NudgePrefs", Context.MODE_PRIVATE)
-            .getString(PREFS_KEY_SYNC_ID, null)
+    fun getSyncCode(context: Context): String = getSyncId(context) ?: NO_CODE
+
+    private fun getSyncId(context: Context): String? {
+        val p = prefs(context)
+        return if (p.getBoolean(PREFS_KEY_SYNC_ENABLED, false)) p.getString(PREFS_KEY_SYNC_ID, null) else null
+    }
 
     // ── Poll ALL laptop counts (keyed by date) — for chart history ───────────
-    fun laptopHistoryFlow(context: Context): Flow<Map<String, Int>> = flow {
-        val syncId = getSyncId(context) ?: run { emit(emptyMap()); return@flow }
-        while (true) {
-            val rows = getRows("sync_state?sync_id=eq.${encode(syncId)}&select=date,laptop_count")
-            val map = rows.associate { it.getString("date") to it.optInt("laptop_count") }
-                .filterValues { it > 0 }
-            emit(map)
-            delay(POLL_INTERVAL_MS)
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun laptopHistoryFlow(context: Context): Flow<Map<String, Int>> =
+        _syncCodeFlow.flatMapLatest { syncId ->
+            if (syncId == NO_CODE) flowOf(emptyMap<String, Int>()) else flow {
+                while (true) {
+                    val rows = getRows("sync_state?sync_id=eq.${encode(syncId)}&select=date,laptop_count")
+                    val map = rows.associate { it.getString("date") to it.optInt("laptop_count") }
+                        .filterValues { it > 0 }
+                    emit(map)
+                    delay(POLL_INTERVAL_MS)
+                }
+            }
         }
-    }
 
     // ── Poll laptop_count for a single date ───────────────────────────────────
-    fun laptopCountFlow(context: Context, date: String): Flow<Int> = flow {
-        val syncId = getSyncId(context) ?: run { emit(0); return@flow }
-        while (true) {
-            val rows = getRows("sync_state?sync_id=eq.${encode(syncId)}&date=eq.$date&select=laptop_count")
-            emit(rows.firstOrNull()?.optInt("laptop_count") ?: 0)
-            delay(POLL_INTERVAL_MS)
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun laptopCountFlow(context: Context, date: String): Flow<Int> =
+        _syncCodeFlow.flatMapLatest { syncId ->
+            if (syncId == NO_CODE) flowOf(0) else flow {
+                while (true) {
+                    val rows = getRows("sync_state?sync_id=eq.${encode(syncId)}&date=eq.$date&select=laptop_count")
+                    emit(rows.firstOrNull()?.optInt("laptop_count") ?: 0)
+                    delay(POLL_INTERVAL_MS)
+                }
+            }
         }
-    }
 
     // ── Push today's phone count (called from ResetWorker + onStop) ──────────
     // Upserts only the phone_* columns — PostgREST's merge-duplicates

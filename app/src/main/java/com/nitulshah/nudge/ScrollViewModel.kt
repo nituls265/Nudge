@@ -35,7 +35,7 @@ class ScrollViewModel(
         // function of install date alone.
         viewModelScope.launch(Dispatchers.IO) {
             val installDate = DayBoundary.keyOf(
-                appContext.getSharedPreferences(CalibrationPrefs.FILE_NAME, android.content.Context.MODE_PRIVATE)
+                calibrationPrefs(appContext)
                     .getLong(CalibrationPrefs.KEY_FIRST_LAUNCH_DATE, System.currentTimeMillis())
             )
             val sevenDaysBack = DayBoundary.daysAgo(7)

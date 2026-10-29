@@ -100,7 +100,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun recordFirstLaunchDate() {
-        val prefs = getSharedPreferences(CalibrationPrefs.FILE_NAME, Context.MODE_PRIVATE)
+        val prefs = calibrationPrefs(this)
         if (!prefs.contains(CalibrationPrefs.KEY_FIRST_LAUNCH_DATE)) {
             // The old code hard-coded an 8-day backdate for ALL builds, which
             // silently disabled the 7-day calibration period for every real

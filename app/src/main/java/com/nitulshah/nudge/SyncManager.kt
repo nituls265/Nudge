@@ -53,8 +53,10 @@ object SyncManager {
     private val _syncCodeFlow = MutableStateFlow(NO_CODE)
     val syncCodeFlow: StateFlow<String> = _syncCodeFlow
 
+    // Own file so it is excluded from Auto Backup: a restored phone must not
+    // silently resume syncing under an old Sync Code.
     private fun prefs(context: Context) =
-        context.getSharedPreferences("NudgePrefs", Context.MODE_PRIVATE)
+        context.getSharedPreferences("NudgeSyncPrefs", Context.MODE_PRIVATE)
 
     /**
      * Sync is off until the user turns it on in Settings: no Sync Code is

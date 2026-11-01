@@ -300,8 +300,10 @@ class ScrollViewModel(
                             consistencyScore = d.consistencyScore
                         )
                     }.toMutableMap()
-                    // Always inject the live score for today so it stays up-to-date
-                    pointMap[today] = WellnessHistoryPoint(
+                    // Inject the live score for today so it stays up-to-date — unless
+                    // nothing has been tracked yet today, in which case leave it empty
+                    // like any other unscored day.
+                    if (liveScore.hasData) pointMap[today] = WellnessHistoryPoint(
                         date             = today,
                         score            = liveScore.total,
                         scrollVolume     = liveScore.scrollVolume,
@@ -341,8 +343,9 @@ class ScrollViewModel(
                         appQuality       = d.appQuality
                     )
                 }.toMutableMap()
-                // Always inject live today score so the delta reflects the current moment
-                map[today] = WellnessHistoryPoint(
+                // Inject live today score so the delta reflects the current moment
+                // (only once something has actually been tracked today).
+                if (liveScore.hasData) map[today] = WellnessHistoryPoint(
                     date             = today,
                     score            = liveScore.total,
                     scrollVolume     = liveScore.scrollVolume,
@@ -396,7 +399,7 @@ class ScrollViewModel(
      * motivate: today is what moves it.
      */
     val overallDelta: StateFlow<Int?> = combine(wellnessScore, overallAverage) { live, avg ->
-        avg?.let { live.total - it }
+        avg?.takeIf { live.hasData }?.let { live.total - it }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -477,8 +480,19 @@ class ScrollViewModel(
             val scrollDays   = repo.scrollHistorySince(thirtyDaysBack).firstOrNull()
                                ?: emptyList()
             val scrollByDate = scrollDays.associateBy { it.date }
-            val wellnessDates = repo.wellnessHistorySince(thirtyDaysBack).firstOrNull()
-                               ?.map { it.date }?.toSet() ?: emptySet()
+            val storedWellness = repo.wellnessHistorySince(thirtyDaysBack).firstOrNull()
+                               ?: emptyList()
+
+            // Days with no tracked scrolls or unlocks have nothing to score. Earlier
+            // versions stored a default perfect 100 for them (e.g. every day before
+            // the accessibility service was turned on) — remove those rows.
+            suspend fun tracked(date: String) = WellnessCalculator.hasTrackedActivity(
+                scrollByDate[date]?.count ?: 0,
+                repo.unlockDay(date)?.count ?: 0
+            )
+            val untrackedRows = storedWellness.filter { it.date != today && !tracked(it.date) }
+            untrackedRows.forEach { repo.deleteWellnessDay(it.date) }
+            val wellnessDates = (storedWellness - untrackedRows.toSet()).map { it.date }.toSet()
 
             // Every date in [thirtyDaysBack, today) without a wellness row — a day with
             // zero phone usage never gets a ScrollDay row either, but still needs a score.
@@ -487,6 +501,7 @@ class ScrollViewModel(
             if (missing.isEmpty()) return
 
             for (date in missing) {
+                if (!tracked(date)) continue   // nothing tracked — leave the day unscored
                 val scrollCount = scrollByDate[date]?.count ?: 0
 
                 // Date after this day (needed for the exclusive-end app-scroll query)

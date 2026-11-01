@@ -41,7 +41,8 @@ data class WellnessScore(
     val baselineScrolls: Int,          // 7-day avg used as reference (0 = no baseline yet)
     val bedtimeScore: Int = -1,        // 0–10 — Time Hygiene sub-component (-1 = unavailable)
     val gapScore: Int = -1,            // 0–6  — Time Hygiene sub-component (-1 = unavailable)
-    val consistencyScore: Int = -1     // 0–4  — Time Hygiene sub-component (-1 = unavailable)
+    val consistencyScore: Int = -1,    // 0–4  — Time Hygiene sub-component (-1 = unavailable)
+    val hasData: Boolean = true        // false = no scrolls or unlocks tracked, see hasTrackedActivity
 )
 
 // ── Risky app registry ────────────────────────────────────────────────────────
@@ -110,6 +111,14 @@ enum class AppCategory(val pts: Int, val label: String) {
 // ── Calculator ────────────────────────────────────────────────────────────────
 
 object WellnessCalculator {
+
+    /**
+     * Whether a day has anything to score. Scrolls and unlocks are both recorded by
+     * the accessibility service, so a day with neither means tracking was off (or
+     * the phone was) — not a perfect day. Every component defaults to full credit
+     * when its input is missing, so scoring such a day would show a fake 100.
+     */
+    fun hasTrackedActivity(scrolls: Int, unlocks: Int): Boolean = scrolls > 0 || unlocks > 0
 
     /**
      * @param todayScrolls      combined phone + laptop count for today
@@ -274,7 +283,8 @@ object WellnessCalculator {
             baselineScrolls  = sevenDayAvg.toInt(),
             bedtimeScore     = bedtimePts,
             gapScore         = gapPts,
-            consistencyScore = consistencyPts
+            consistencyScore = consistencyPts,
+            hasData          = hasTrackedActivity(todayScrolls, unlockCount)
         )
     }
 

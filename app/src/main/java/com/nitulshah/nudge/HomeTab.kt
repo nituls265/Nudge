@@ -1,5 +1,10 @@
 package com.nitulshah.nudge
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -22,6 +27,10 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -47,6 +56,14 @@ fun HomeTab(vm: ScrollViewModel, onSettingsClick: () -> Unit) {
     val unlockCount      by vm.unlockCount.collectAsState()
     val screenTimeMin    by vm.todayScreenTimeMin.collectAsState()
 
+    // Permissions live in system settings, so re-check every time the app comes
+    // back to the foreground (e.g. after the user flips the switch and returns).
+    val context = LocalContext.current
+    val trackingEnabled = rememberOnResume {
+        isAccessibilityServiceEnabled(context, MyAccessibilityService::class.java)
+    }
+    val overlayAllowed = rememberOnResume { Settings.canDrawOverlays(context) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -61,20 +78,27 @@ fun HomeTab(vm: ScrollViewModel, onSettingsClick: () -> Unit) {
 
         Spacer(Modifier.height(32.dp))
 
-        // ── Hero: score ring ──────────────────────────────────────────────────
-        // Shown from day one. Parts of the score that need history (scroll
-        // volume vs. the 7-day average, first-unlock consistency) fall back to
-        // neutral credit until that history exists — see WellnessCalculator.
-        ScoreRingHero(
-            score          = wellnessScore,
-            trendLabel     = scoreTrendLabel,
-            overallAverage = overallAverage,
-            overallDelta   = overallDelta
-        )
+        // ── Setup: nothing is counted until the accessibility service is on ───
+        // Without it there's no data, and a score would just be the all-defaults
+        // 100, so the setup card takes the score's place.
+        if (!trackingEnabled) {
+            TrackingSetupCard(context = context, overlayAllowed = overlayAllowed)
+        } else {
+            // ── Hero: score ring ──────────────────────────────────────────────
+            // Shown from day one. Parts of the score that need history (scroll
+            // volume vs. the 7-day average, first-unlock consistency) fall back
+            // to neutral credit until that history exists — see WellnessCalculator.
+            ScoreRingHero(
+                score          = wellnessScore,
+                trendLabel     = scoreTrendLabel,
+                overallAverage = overallAverage,
+                overallDelta   = overallDelta
+            )
+        }
 
         // ── Today vs. 30-day average — where today's dot sits against the
         // slow-moving baseline it's meant to nudge up. ─────────────────────────
-        if (overallAverage != null) {
+        if (trackingEnabled && overallAverage != null) {
             Spacer(Modifier.height(16.dp))
             TierScaleBar(currentScore = wellnessScore.total, averageScore = overallAverage)
         }
@@ -95,9 +119,126 @@ fun HomeTab(vm: ScrollViewModel, onSettingsClick: () -> Unit) {
         Spacer(Modifier.height(20.dp))
 
         // ── Score drivers (always visible — never hidden behind an expand) ────
-        SubMetricBarsSection(score = wellnessScore)
+        if (trackingEnabled) SubMetricBarsSection(score = wellnessScore)
 
         Spacer(Modifier.height(40.dp))
+    }
+}
+
+// ── Permission helpers ────────────────────────────────────────────────────────
+
+/** [check] evaluated now and again on every ON_RESUME. */
+@Composable
+private fun rememberOnResume(check: () -> Boolean): Boolean {
+    var value by remember { mutableStateOf(check()) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) value = check()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    return value
+}
+
+// ── Tracking setup card (shown instead of the score until tracking is on) ─────
+
+@Composable
+private fun TrackingSetupCard(context: Context, overlayAllowed: Boolean) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape    = RoundedCornerShape(18.dp),
+        colors   = CardDefaults.cardColors(containerColor = Slate800)
+    ) {
+        Column(
+            modifier            = Modifier.fillMaxWidth().padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                "Turn on scroll tracking",
+                style      = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.ExtraBold,
+                color      = MaterialTheme.colorScheme.onBackground
+            )
+            Text(
+                "Nudge counts scrolls and unlocks with an Android accessibility service. " +
+                    "Nothing is tracked, and there's no score, until it's on.",
+                style      = MaterialTheme.typography.bodySmall,
+                color      = Slate400,
+                lineHeight = 18.sp
+            )
+            Button(
+                onClick  = {
+                    context.startActivity(
+                        Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    )
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape    = RoundedCornerShape(14.dp)
+            ) {
+                Text("Open accessibility settings")
+            }
+            Text(
+                "Find Nudge under Downloaded apps (or Installed apps) and switch it on.",
+                style      = MaterialTheme.typography.labelSmall,
+                color      = Slate500,
+                lineHeight = 16.sp
+            )
+
+            // Android 13+ blocks accessibility for apps installed outside an app
+            // store (GitHub APK) until "Allow restricted settings" is chosen.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                HorizontalDivider(color = Slate700)
+                Text(
+                    "Is Nudge greyed out or showing \"Restricted setting\"? Open App info, " +
+                        "tap the ⋮ menu, choose Allow restricted settings, then try again.",
+                    style      = MaterialTheme.typography.labelSmall,
+                    color      = Slate400,
+                    lineHeight = 16.sp
+                )
+                OutlinedButton(
+                    onClick  = {
+                        context.startActivity(
+                            Intent(
+                                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                Uri.parse("package:${context.packageName}")
+                            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape    = RoundedCornerShape(14.dp)
+                ) {
+                    Text("Open app info")
+                }
+            }
+
+            // Optional: only the floating bubble needs this, not counting.
+            if (!overlayAllowed) {
+                HorizontalDivider(color = Slate700)
+                Text(
+                    "Optional: allow Display over other apps to show the floating scroll-count bubble.",
+                    style      = MaterialTheme.typography.labelSmall,
+                    color      = Slate400,
+                    lineHeight = 16.sp
+                )
+                OutlinedButton(
+                    onClick  = {
+                        context.startActivity(
+                            Intent(
+                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                Uri.parse("package:${context.packageName}")
+                            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape    = RoundedCornerShape(14.dp)
+                ) {
+                    Text("Allow display over other apps")
+                }
+            }
+        }
     }
 }
 

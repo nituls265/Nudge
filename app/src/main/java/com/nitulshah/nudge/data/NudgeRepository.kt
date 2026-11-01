@@ -95,6 +95,8 @@ class NudgeRepository private constructor(private val db: ScrollDatabase) {
 
     suspend fun deleteWellnessBefore(date: String) = wellnessDao.deleteBefore(date)
 
+    suspend fun deleteWellnessDay(date: String) = wellnessDao.deleteDay(date)
+
     /**
      * Ensures every date in `[startDate, endDateExclusive)` has a persisted
      * ScrollDay row, inserting a zero-count row for any that are missing.

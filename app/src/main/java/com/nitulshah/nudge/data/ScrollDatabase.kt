@@ -28,6 +28,9 @@ interface ScrollDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOrUpdate(day: ScrollDay)
 
+    @Query("SELECT MIN(date) FROM scroll_history WHERE count > 0")
+    suspend fun firstActiveDate(): String?
+
     @Query("SELECT * FROM scroll_history ORDER BY date DESC LIMIT 7")
     fun getLast7Days(): Flow<List<ScrollDay>>
 
@@ -76,6 +79,9 @@ data class UnlockHour(
 interface UnlockDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOrUpdate(day: UnlockDay)
+
+    @Query("SELECT MIN(date) FROM unlock_history WHERE count > 0")
+    suspend fun firstActiveDate(): String?
 
     @Query("SELECT * FROM unlock_history WHERE date >= :startDate ORDER BY date ASC")
     fun getHistorySince(startDate: String): Flow<List<UnlockDay>>

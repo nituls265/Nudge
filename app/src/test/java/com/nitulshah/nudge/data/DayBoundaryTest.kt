@@ -5,8 +5,7 @@ import org.junit.Test
 
 /**
  * DayBoundary is the single source of "what day is it" for the whole app
- * (see its own doc comment); everything in this rework — CalibrationState,
- * DateRange, the repository backfill — is built on its key format and shift
+ * (see its own doc comment); everything in this rework — DateRange, the repository backfill — is built on its key format and shift
  * arithmetic being internally consistent. It had no test coverage before this.
  */
 class DayBoundaryTest {

@@ -38,10 +38,11 @@ data class WellnessScore(
     val appQuality: Int,               // 0–15
     val flaggedApps: List<String>,     // display names of risky apps in the top-3 sources
     val todayScrolls: Int,             // total scrolls used to compute scroll volume
-    val baselineScrolls: Int,          // 7-day avg used as reference (0 = calibrating)
+    val baselineScrolls: Int,          // 7-day avg used as reference (0 = no baseline yet)
     val bedtimeScore: Int = -1,        // 0–10 — Time Hygiene sub-component (-1 = unavailable)
     val gapScore: Int = -1,            // 0–6  — Time Hygiene sub-component (-1 = unavailable)
-    val consistencyScore: Int = -1     // 0–4  — Time Hygiene sub-component (-1 = unavailable)
+    val consistencyScore: Int = -1,    // 0–4  — Time Hygiene sub-component (-1 = unavailable)
+    val hasData: Boolean = true        // false = no scrolls or unlocks tracked yet today
 )
 
 // ── Risky app registry ────────────────────────────────────────────────────────
@@ -110,6 +111,14 @@ enum class AppCategory(val pts: Int, val label: String) {
 // ── Calculator ────────────────────────────────────────────────────────────────
 
 object WellnessCalculator {
+
+    /**
+     * Whether a day recorded any scrolls or unlocks. Once tracking has started, a
+     * day without either is a real day the phone wasn't used, and its 100 is earned;
+     * before tracking ever started (see NudgeRepository.firstTrackedDate) there is
+     * simply no data, so such days are left unscored.
+     */
+    fun hasTrackedActivity(scrolls: Int, unlocks: Int): Boolean = scrolls > 0 || unlocks > 0
 
     /**
      * @param todayScrolls      combined phone + laptop count for today
@@ -274,7 +283,8 @@ object WellnessCalculator {
             baselineScrolls  = sevenDayAvg.toInt(),
             bedtimeScore     = bedtimePts,
             gapScore         = gapPts,
-            consistencyScore = consistencyPts
+            consistencyScore = consistencyPts,
+            hasData          = hasTrackedActivity(todayScrolls, unlockCount)
         )
     }
 

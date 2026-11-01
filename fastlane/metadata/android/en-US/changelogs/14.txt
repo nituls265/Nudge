@@ -1,0 +1,1 @@
+The Home screen now walks you through turning on scroll tracking (Android's accessibility setting), including the "Allow restricted settings" step needed when installing from GitHub, plus the optional overlay permission for the bubble. History no longer shows scores for days before Nudge started tracking; a day with no use after that still counts as a perfect 100.

@@ -28,20 +28,6 @@ fun SettingsSheet(vm: ScrollViewModel, onDismiss: () -> Unit) {
     val isPaused        by vm.isPaused.collectAsState()
     val syncCode        by vm.syncCode.collectAsState()
 
-    // Read calibration state once — same helper HomeTab uses, so both surfaces
-    // always agree. See CalibrationState's doc for why install date is the only
-    // input: it's what guarantees this can never get stuck open.
-    val calibration = remember { readCalibrationState(context) }
-    val isCalibrating            = calibration.isCalibrating
-    val calibrationDaysRemaining = calibration.daysRemaining
-    val calibrationTotalDays     = calibration.totalDays
-
-    // Both overlay permission AND accessibility service must be granted for the
-    // bubble to function. Check this here rather than in the VM so it reflects
-    // whatever the user last changed in system settings.
-    val permissionsGranted = Settings.canDrawOverlays(context) &&
-        isAccessibilityServiceEnabled(context, MyAccessibilityService::class.java)
-
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor   = Slate800,
@@ -65,12 +51,6 @@ fun SettingsSheet(vm: ScrollViewModel, onDismiss: () -> Unit) {
 
             Spacer(Modifier.height(20.dp))
 
-            // Calibration progress card — only shown during the 7-day window
-            if (isCalibrating) {
-                CalibrationCard(daysRemaining = calibrationDaysRemaining, totalDays = calibrationTotalDays)
-                Spacer(Modifier.height(20.dp))
-            }
-
             // ── Bubble toggle ─────────────────────────────────────────────────
             // Guides the user through the permission flow if either permission
             // is missing, rather than silently doing nothing.
@@ -90,15 +70,11 @@ fun SettingsSheet(vm: ScrollViewModel, onDismiss: () -> Unit) {
                             else -> vm.toggleBubble()
                         }
                     },
-                    enabled            = !isCalibrating || !permissionsGranted,
                     modifier           = Modifier.fillMaxWidth(),
                     shape              = RoundedCornerShape(16.dp),
                     contentPadding     = PaddingValues(vertical = 16.dp)
                 ) {
                     Text(if (isBubbleVisible) "Hide Bubble" else "Show Bubble")
-                }
-                if (isCalibrating && permissionsGranted) {
-                    LockBadge(Modifier.align(Alignment.TopEnd))
                 }
             }
 
@@ -108,20 +84,15 @@ fun SettingsSheet(vm: ScrollViewModel, onDismiss: () -> Unit) {
             Box(modifier = Modifier.fillMaxWidth()) {
                 FilledTonalButton(
                     onClick        = { vm.togglePause() },
-                    enabled        = !isCalibrating,
                     modifier       = Modifier.fillMaxWidth(),
                     shape          = RoundedCornerShape(16.dp),
                     contentPadding = PaddingValues(vertical = 16.dp)
                 ) {
                     Text(
                         if (isPaused) "Resume Tracking" else "Pause Tracking",
-                        color = if (isCalibrating)
-                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                        else
-                            MaterialTheme.colorScheme.onBackground
+                        color = MaterialTheme.colorScheme.onBackground
                     )
                 }
-                if (isCalibrating) LockBadge(Modifier.align(Alignment.TopEnd))
             }
 
             Spacer(Modifier.height(20.dp))
@@ -163,13 +134,12 @@ fun SettingsSheet(vm: ScrollViewModel, onDismiss: () -> Unit) {
 
             Spacer(Modifier.height(8.dp))
 
-            // ── Destructive reset — disabled during calibration ───────────────
+            // ── Destructive reset ─────────────────────────────────────────────
             TextButton(
                 onClick  = {
                     vm.resetScrollCount()
                     onDismiss()
                 },
-                enabled  = !isCalibrating,
                 colors   = ButtonDefaults.textButtonColors(
                     contentColor         = MaterialTheme.colorScheme.error,
                     disabledContentColor = MaterialTheme.colorScheme.error.copy(alpha = 0.38f)

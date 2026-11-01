@@ -25,14 +25,14 @@ class ScrollViewModel(
 
     private val _previousDayLastUnlockMs = MutableStateFlow(0L)
     private val _personalAvgFirstUnlockMinute = MutableStateFlow<Int?>(null)
+    // First day any scroll or unlock was recorded; null = tracking never started.
+    private val _firstTrackedDate = MutableStateFlow<String?>(null)
 
     init {
         // Self-heal any past day in the trailing week missing a ScrollDay row —
         // e.g. ResetWorker never ran that night (Doze / OEM battery killer). This
-        // is a data-completeness fix, not an onboarding one: it keeps things like
-        // sevenDayScrollAvg (below) accurate. It must NEVER be used to re-open the
-        // calibration gate — see CalibrationState's doc for why that gate is a pure
-        // function of install date alone.
+        // is a data-completeness fix: it keeps things like sevenDayScrollAvg
+        // (below) accurate.
         viewModelScope.launch(Dispatchers.IO) {
             val installDate = DayBoundary.keyOf(
                 calibrationPrefs(appContext)
@@ -49,7 +49,10 @@ class ScrollViewModel(
         }
         // Backfill wellness scores for any past day that has scroll data but no wellness entry.
         // Handles the case where ResetWorker was delayed by Doze / battery optimisation.
-        viewModelScope.launch(Dispatchers.IO) { backfillMissingWellnessScores() }
+        viewModelScope.launch(Dispatchers.IO) {
+            _firstTrackedDate.value = repo.firstTrackedDate()
+            backfillMissingWellnessScores()
+        }
         // Yesterday's last-unlock time and the personal first-unlock baseline are both
         // fixed for the whole day (nothing before today changes intraday), so one-shot
         // fetches are enough — no need for reactive flows.
@@ -238,25 +241,6 @@ class ScrollViewModel(
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0f)
     }
 
-    // ── Scroll-history gap diagnostic (internal — never gates the UI) ─────────
-    // Counts how many of the trailing 7 days are missing a ScrollDay row, before
-    // the startup backfill (above) has a chance to run. Exposed only so init{}
-    // can log it — see that block's comment for why this must never re-open the
-    // calibration gate, which is a pure function of install date alone
-    // (CalibrationState). Mirrors sevenDayScrollAvg's full-7-day requirement but
-    // without the >=5-scroll filter, so a genuinely light usage day still counts
-    // as "we have data".
-    val scrollBaselineDaysRemaining: StateFlow<Int> = run {
-        val startDate = DayBoundary.daysAgo(7)
-        repo.scrollHistorySince(startDate)
-            .map { dbDays ->
-                val today = DayBoundary.today()
-                val validDays = dbDays.count { it.date != today }
-                maxOf(0, 7 - validDays)
-            }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 7)
-    }
-
     // ── Live wellness score ───────────────────────────────────────────────────
 
     val wellnessScore: StateFlow<WellnessScore> = combine(
@@ -302,8 +286,10 @@ class ScrollViewModel(
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val wellnessHistory: StateFlow<List<WellnessHistoryPoint>> =
-        combine(_timeRange, wellnessScore) { days, liveScore -> Pair(days, liveScore) }
-            .flatMapLatest { (days, liveScore) ->
+        combine(_timeRange, wellnessScore, _firstTrackedDate) { days, liveScore, firstTracked ->
+            Triple(days, liveScore.takeIf { it.hasData || firstTracked != null }, firstTracked)
+        }
+            .flatMapLatest { (days, liveScore, _) ->
                 val startDate = DayBoundary.daysAgo(days - 1)
                 repo.wellnessHistorySince(startDate).map { dbDays ->
                     val today = DayBoundary.today()
@@ -321,8 +307,10 @@ class ScrollViewModel(
                             consistencyScore = d.consistencyScore
                         )
                     }.toMutableMap()
-                    // Always inject the live score for today so it stays up-to-date
-                    pointMap[today] = WellnessHistoryPoint(
+                    // Inject the live score for today so it stays up-to-date — unless
+                    // tracking has never recorded anything (fresh install, service not
+                    // on yet), in which case today has no score either.
+                    if (liveScore != null) pointMap[today] = WellnessHistoryPoint(
                         date             = today,
                         score            = liveScore.total,
                         scrollVolume     = liveScore.scrollVolume,
@@ -348,7 +336,8 @@ class ScrollViewModel(
     private val recentWellnessHistory: StateFlow<List<WellnessHistoryPoint>> = run {
         val startDate = DayBoundary.daysAgo(6)
         repo.wellnessHistorySince(startDate)
-            .combine(wellnessScore) { dbDays, liveScore ->
+            .combine(combine(wellnessScore, _firstTrackedDate) { s, f -> s to (s.hasData || f != null) }) {
+                    dbDays, (liveScore, todayScored) ->
                 // Mirror the logic in wellnessHistory but for a fixed 7-day window.
                 val today = DayBoundary.today()
                 val map = dbDays.associate { d ->
@@ -362,8 +351,9 @@ class ScrollViewModel(
                         appQuality       = d.appQuality
                     )
                 }.toMutableMap()
-                // Always inject live today score so the delta reflects the current moment
-                map[today] = WellnessHistoryPoint(
+                // Inject live today score so the delta reflects the current moment
+                // (only once tracking has started).
+                if (todayScored) map[today] = WellnessHistoryPoint(
                     date             = today,
                     score            = liveScore.total,
                     scrollVolume     = liveScore.scrollVolume,
@@ -416,31 +406,9 @@ class ScrollViewModel(
      * 30-day average — this, not the average itself, is the number meant to
      * motivate: today is what moves it.
      */
-    val overallDelta: StateFlow<Int?> = combine(wellnessScore, overallAverage) { live, avg ->
-        avg?.let { live.total - it }
+    val overallDelta: StateFlow<Int?> = combine(wellnessScore, overallAverage, _firstTrackedDate) { live, avg, firstTracked ->
+        avg?.takeIf { live.hasData || firstTracked != null }?.let { live.total - it }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
-
-    // Declared after scrollBaselineDaysRemaining on purpose: a coroutine launched from
-    // the earlier init block can read it before it is assigned.
-    init {
-        // Diagnostic only (Logcat tag "Calibration") — not shown in the UI. Logs the
-        // data-completeness signal alongside the real (install-date) gate so "still
-        // calibrating long after install" is debuggable from a bug report, without
-        // that signal ever controlling what the user sees.
-        viewModelScope.launch(Dispatchers.IO) {
-            scrollBaselineDaysRemaining
-                .collect { scrollRemaining ->
-                    val install = readCalibrationState(appContext)
-                    if (install.isCalibrating || scrollRemaining > 0) {
-                        android.util.Log.d(
-                            "Calibration",
-                            "installDaysRemaining=${install.daysRemaining} " +
-                                "scrollHistoryGapDays=$scrollRemaining"
-                        )
-                    }
-                }
-        }
-    }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -520,13 +488,23 @@ class ScrollViewModel(
             val scrollDays   = repo.scrollHistorySince(thirtyDaysBack).firstOrNull()
                                ?: emptyList()
             val scrollByDate = scrollDays.associateBy { it.date }
+
+            // Days before tracking first recorded anything (e.g. installed, but the
+            // accessibility service not turned on yet) have no data at all, so they
+            // aren't scored. Earlier versions stored a default perfect 100 for them;
+            // remove those. Days from then on are scored even with zero usage — the
+            // phone simply wasn't used, and that 100 is real.
+            val firstTracked = repo.firstTrackedDate()
+            repo.deleteWellnessBefore(firstTracked ?: today)
+            if (firstTracked == null) return
+
             val wellnessDates = repo.wellnessHistorySince(thirtyDaysBack).firstOrNull()
                                ?.map { it.date }?.toSet() ?: emptySet()
 
             // Every date in [thirtyDaysBack, today) without a wellness row — a day with
             // zero phone usage never gets a ScrollDay row either, but still needs a score.
             // (today is excluded by the range itself: the live score handles today.)
-            val missing = DateRange.missingDates(wellnessDates, thirtyDaysBack, today)
+            val missing = DateRange.missingDates(wellnessDates, maxOf(thirtyDaysBack, firstTracked), today)
             if (missing.isEmpty()) return
 
             for (date in missing) {

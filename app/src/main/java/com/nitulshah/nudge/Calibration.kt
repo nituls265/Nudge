@@ -2,13 +2,15 @@ package com.nitulshah.nudge
 
 import android.content.Context
 import android.content.SharedPreferences
-import com.nitulshah.nudge.data.CalibrationState
 
 /**
- * The only places that need to agree on where the first-launch timestamp
- * lives: [MainActivity] (writer, once per install) and [readCalibrationState]
- * (reader, everywhere else). It has its own file so Android Auto Backup can
- * restore it on reinstall (see res/xml/backup_rules.xml) without also
+ * Where the first-launch (install) timestamp lives. [MainActivity] writes it
+ * once per install; [ScrollViewModel] reads it so history backfill and wellness
+ * scoring never invent data for days before install. (The names still say
+ * "calibration" because versions up to 1.9 used this date to gate a 7-day
+ * calibration period; the file name must stay as-is for Auto Backup restores.)
+ *
+ * It has its own file so Android Auto Backup can restore it on reinstall (see res/xml/backup_rules.xml) without also
  * restoring the app's other, unrelated state in "NudgePrefs".
  */
 object CalibrationPrefs {
@@ -29,14 +31,4 @@ fun calibrationPrefs(context: Context): SharedPreferences {
         }
     }
     return prefs
-}
-
-/** Reads the persisted first-launch timestamp and computes [CalibrationState] from it. */
-fun readCalibrationState(
-    context: Context,
-    nowMs: Long = System.currentTimeMillis()
-): CalibrationState {
-    val prefs = calibrationPrefs(context)
-    val firstLaunchMs = prefs.getLong(CalibrationPrefs.KEY_FIRST_LAUNCH_DATE, nowMs)
-    return CalibrationState.compute(firstLaunchMs, nowMs)
 }

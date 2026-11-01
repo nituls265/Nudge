@@ -1,5 +1,10 @@
 package com.nitulshah.nudge
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -23,6 +28,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -33,8 +41,6 @@ import kotlin.math.abs
 
 @Composable
 fun HomeTab(vm: ScrollViewModel, onSettingsClick: () -> Unit) {
-    val context = LocalContext.current
-
     // ── State collection — only what HomeTab actually needs ───────────────────
     // Each collectAsState() subscribes to exactly one StateFlow.
     // SharingStarted.WhileSubscribed(5000) in the VM means flows stop after
@@ -50,14 +56,13 @@ fun HomeTab(vm: ScrollViewModel, onSettingsClick: () -> Unit) {
     val unlockCount      by vm.unlockCount.collectAsState()
     val screenTimeMin    by vm.todayScreenTimeMin.collectAsState()
 
-    // Calibration state — read once per composition; SharedPrefs is fast and
-    // this value only changes at midnight, so remember is correct here. This is
-    // the single source of truth for the onboarding gate — see CalibrationState's
-    // doc for why nothing else (e.g. usage-history gaps) is allowed to affect it.
-    val calibration = remember { readCalibrationState(context) }
-    val isCalibrating           = calibration.isCalibrating
-    val calibrationDaysRemaining = calibration.daysRemaining
-    val calibrationTotalDays     = calibration.totalDays
+    // Permissions live in system settings, so re-check every time the app comes
+    // back to the foreground (e.g. after the user flips the switch and returns).
+    val context = LocalContext.current
+    val trackingEnabled = rememberOnResume {
+        isAccessibilityServiceEnabled(context, MyAccessibilityService::class.java)
+    }
+    val overlayAllowed = rememberOnResume { Settings.canDrawOverlays(context) }
 
     Column(
         modifier = Modifier
@@ -73,10 +78,16 @@ fun HomeTab(vm: ScrollViewModel, onSettingsClick: () -> Unit) {
 
         Spacer(Modifier.height(32.dp))
 
-        // ── Hero: score ring or calibration ring ──────────────────────────────
-        if (isCalibrating) {
-            CalibrationRingHero(daysRemaining = calibrationDaysRemaining, totalDays = calibrationTotalDays)
+        // ── Setup: nothing is counted until the accessibility service is on ───
+        // Without it there's no data, and a score would just be the all-defaults
+        // 100, so the setup card takes the score's place.
+        if (!trackingEnabled) {
+            TrackingSetupCard(context = context, overlayAllowed = overlayAllowed)
         } else {
+            // ── Hero: score ring ──────────────────────────────────────────────
+            // Shown from day one. Parts of the score that need history (scroll
+            // volume vs. the 7-day average, first-unlock consistency) fall back
+            // to neutral credit until that history exists — see WellnessCalculator.
             ScoreRingHero(
                 score          = wellnessScore,
                 trendLabel     = scoreTrendLabel,
@@ -87,7 +98,7 @@ fun HomeTab(vm: ScrollViewModel, onSettingsClick: () -> Unit) {
 
         // ── Today vs. 30-day average — where today's dot sits against the
         // slow-moving baseline it's meant to nudge up. ─────────────────────────
-        if (!isCalibrating && overallAverage != null) {
+        if (trackingEnabled && overallAverage != null) {
             Spacer(Modifier.height(16.dp))
             TierScaleBar(currentScore = wellnessScore.total, averageScore = overallAverage)
         }
@@ -108,15 +119,126 @@ fun HomeTab(vm: ScrollViewModel, onSettingsClick: () -> Unit) {
         Spacer(Modifier.height(20.dp))
 
         // ── Score drivers (always visible — never hidden behind an expand) ────
-        if (!isCalibrating) {
-            SubMetricBarsSection(score = wellnessScore)
-        } else {
-            // During calibration the sub-metrics have no meaning yet, so show
-            // the calibration progress card here instead.
-            CalibrationCard(daysRemaining = calibrationDaysRemaining, totalDays = calibrationTotalDays)
-        }
+        if (trackingEnabled) SubMetricBarsSection(score = wellnessScore)
 
         Spacer(Modifier.height(40.dp))
+    }
+}
+
+// ── Permission helpers ────────────────────────────────────────────────────────
+
+/** [check] evaluated now and again on every ON_RESUME. */
+@Composable
+private fun rememberOnResume(check: () -> Boolean): Boolean {
+    var value by remember { mutableStateOf(check()) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) value = check()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    return value
+}
+
+// ── Tracking setup card (shown instead of the score until tracking is on) ─────
+
+@Composable
+private fun TrackingSetupCard(context: Context, overlayAllowed: Boolean) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape    = RoundedCornerShape(18.dp),
+        colors   = CardDefaults.cardColors(containerColor = Slate800)
+    ) {
+        Column(
+            modifier            = Modifier.fillMaxWidth().padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                "Turn on scroll tracking",
+                style      = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.ExtraBold,
+                color      = MaterialTheme.colorScheme.onBackground
+            )
+            Text(
+                "Nudge counts scrolls and unlocks with an Android accessibility service. " +
+                    "Nothing is tracked, and there's no score, until it's on.",
+                style      = MaterialTheme.typography.bodySmall,
+                color      = Slate400,
+                lineHeight = 18.sp
+            )
+            Button(
+                onClick  = {
+                    context.startActivity(
+                        Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    )
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape    = RoundedCornerShape(14.dp)
+            ) {
+                Text("Open accessibility settings")
+            }
+            Text(
+                "Find Nudge under Downloaded apps (or Installed apps) and switch it on.",
+                style      = MaterialTheme.typography.labelSmall,
+                color      = Slate500,
+                lineHeight = 16.sp
+            )
+
+            // Android 13+ blocks accessibility for apps installed outside an app
+            // store (GitHub APK) until "Allow restricted settings" is chosen.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                HorizontalDivider(color = Slate700)
+                Text(
+                    "Is Nudge greyed out or showing \"Restricted setting\"? Open App info, " +
+                        "tap the ⋮ menu, choose Allow restricted settings, then try again.",
+                    style      = MaterialTheme.typography.labelSmall,
+                    color      = Slate400,
+                    lineHeight = 16.sp
+                )
+                OutlinedButton(
+                    onClick  = {
+                        context.startActivity(
+                            Intent(
+                                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                Uri.parse("package:${context.packageName}")
+                            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape    = RoundedCornerShape(14.dp)
+                ) {
+                    Text("Open app info")
+                }
+            }
+
+            // Optional: only the floating bubble needs this, not counting.
+            if (!overlayAllowed) {
+                HorizontalDivider(color = Slate700)
+                Text(
+                    "Optional: allow Display over other apps to show the floating scroll-count bubble.",
+                    style      = MaterialTheme.typography.labelSmall,
+                    color      = Slate400,
+                    lineHeight = 16.sp
+                )
+                OutlinedButton(
+                    onClick  = {
+                        context.startActivity(
+                            Intent(
+                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                Uri.parse("package:${context.packageName}")
+                            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape    = RoundedCornerShape(14.dp)
+                ) {
+                    Text("Allow display over other apps")
+                }
+            }
+        }
     }
 }
 
@@ -252,78 +374,6 @@ private fun ScoreRingHero(
     }
 }
 
-// ── Calibration ring (shown instead of score ring during the 7-day window) ───
-
-@Composable
-private fun CalibrationRingHero(daysRemaining: Int, totalDays: Int = 7) {
-    val currentDay = (totalDays + 1 - daysRemaining).coerceIn(1, totalDays)
-    val progress   = currentDay / totalDays.toFloat()
-
-    val animatedProgress by animateFloatAsState(
-        targetValue   = progress,
-        animationSpec = tween(900),
-        label         = "calibration_progress"
-    )
-
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(
-            modifier         = Modifier.size(140.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Canvas(modifier = Modifier.size(140.dp)) {
-                val sw  = 11.dp.toPx()
-                val r   = (size.minDimension - sw) / 2f
-                val tl  = Offset((size.width  - r * 2) / 2f, (size.height - r * 2) / 2f)
-                val arc = Size(r * 2, r * 2)
-                drawArc(
-                    color = Slate700, startAngle = 135f, sweepAngle = 270f,
-                    useCenter = false, style = Stroke(sw, cap = StrokeCap.Round),
-                    topLeft = tl, size = arc
-                )
-                drawArc(
-                    color = Blue,
-                    startAngle = 135f,
-                    sweepAngle = 270f * animatedProgress.coerceIn(0f, 1f),
-                    useCenter = false, style = Stroke(sw, cap = StrokeCap.Round),
-                    topLeft = tl, size = arc
-                )
-            }
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(
-                    imageVector        = Icons.Outlined.BarChart,
-                    contentDescription = null,
-                    tint               = Blue,
-                    modifier           = Modifier.size(24.dp)
-                )
-                Text(
-                    "$currentDay/$totalDays",
-                    style         = MaterialTheme.typography.headlineMedium,
-                    fontWeight    = FontWeight.ExtraBold,
-                    color         = Blue,
-                    letterSpacing = (-1).sp
-                )
-            }
-        }
-
-        Spacer(Modifier.height(14.dp))
-
-        Text("Calibrating", style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.ExtraBold, color = Blue)
-
-        Spacer(Modifier.height(6.dp))
-
-        Text("Learning your habits…", style = MaterialTheme.typography.labelMedium, color = Slate400)
-
-        Spacer(Modifier.height(4.dp))
-
-        Text(
-            "$daysRemaining day${if (daysRemaining != 1) "s" else ""} until your score unlocks",
-            style = MaterialTheme.typography.labelSmall,
-            color = Slate500
-        )
-    }
-}
-
 // ── Compact metric strip ──────────────────────────────────────────────────────
 
 @Composable
@@ -414,7 +464,13 @@ private fun SubMetricBarsSection(score: WellnessScore) {
         // Each bar is coloured by its own % of max, on the same tier scale as
         // the overall score (see ScoreComponent), so good vs. weak drivers read
         // at a glance.
-        ScoreComponent("Scroll Volume",    score.scrollVolume,     30)
+        // Scroll volume compares today against a full 7-day average; until that
+        // exists the calculator gives neutral credit, so label it as such
+        // rather than let the bar read as a real judgement.
+        ScoreComponent(
+            "Scroll Volume", score.scrollVolume, 30,
+            subLabel = if (score.baselineScrolls == 0) "Learning your baseline (needs 7 days)" else null
+        )
         ScoreComponent("Session Length",   score.sessionBehaviour, 20)
         ScoreComponent("Unlock Frequency", score.unlockFrequency,  15)
         ScoreComponent("Time Hygiene",     score.timeHygiene,      20)

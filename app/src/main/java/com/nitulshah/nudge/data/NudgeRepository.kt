@@ -96,6 +96,13 @@ class NudgeRepository private constructor(private val db: ScrollDatabase) {
     suspend fun deleteWellnessBefore(date: String) = wellnessDao.deleteBefore(date)
 
     /**
+     * The first day Nudge ever recorded a scroll or an unlock — i.e. the day
+     * tracking actually started. Null if nothing has been recorded yet.
+     */
+    suspend fun firstTrackedDate(): String? =
+        listOfNotNull(scrollDao.firstActiveDate(), unlockDao.firstActiveDate()).minOrNull()
+
+    /**
      * Ensures every date in `[startDate, endDateExclusive)` has a persisted
      * ScrollDay row, inserting a zero-count row for any that are missing.
      *

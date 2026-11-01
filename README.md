@@ -7,12 +7,13 @@ A draggable floating bubble shows the live count on top of whatever app you're u
 > Status: pre-release (v0). Built as a personal project.
 >
 > No proprietary Google SDKs (Firebase, Play Services, etc.) — F-Droid compatible.
-> Submitted at [MR !44067](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/44067)
-> for [v1.8](https://github.com/nituls265/Nudge/releases/tag/v1.8); awaiting review, not yet live.
+> Accepted into F-Droid ([MR !44067](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/44067)
+> merged); the first F-Droid build is still being published. Latest release:
+> [v1.9](https://github.com/nituls265/Nudge/releases/tag/v1.9).
 >
 > [<img src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png" alt="Get it on F-Droid" height="45">](https://f-droid.org/packages/com.nitulshah.nudge/)
 >
-> Last documented: 2026-10-29
+> Last documented: 2026-11-01
 
 ## Features
 

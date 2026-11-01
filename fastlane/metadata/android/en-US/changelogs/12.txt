@@ -1,0 +1,1 @@
+Your calibration start date and history are now included in Android's automatic backup, so reinstalling restores them. The History screen no longer shows made-up perfect scores for days before you installed the app, and its Scrolls/Unlocks/Time tabs are easier to tell apart from the bottom bar.

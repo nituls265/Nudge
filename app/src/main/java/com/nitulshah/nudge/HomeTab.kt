@@ -22,7 +22,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -33,8 +32,6 @@ import kotlin.math.abs
 
 @Composable
 fun HomeTab(vm: ScrollViewModel, onSettingsClick: () -> Unit) {
-    val context = LocalContext.current
-
     // ── State collection — only what HomeTab actually needs ───────────────────
     // Each collectAsState() subscribes to exactly one StateFlow.
     // SharingStarted.WhileSubscribed(5000) in the VM means flows stop after
@@ -50,15 +47,6 @@ fun HomeTab(vm: ScrollViewModel, onSettingsClick: () -> Unit) {
     val unlockCount      by vm.unlockCount.collectAsState()
     val screenTimeMin    by vm.todayScreenTimeMin.collectAsState()
 
-    // Calibration state — read once per composition; SharedPrefs is fast and
-    // this value only changes at midnight, so remember is correct here. This is
-    // the single source of truth for the onboarding gate — see CalibrationState's
-    // doc for why nothing else (e.g. usage-history gaps) is allowed to affect it.
-    val calibration = remember { readCalibrationState(context) }
-    val isCalibrating           = calibration.isCalibrating
-    val calibrationDaysRemaining = calibration.daysRemaining
-    val calibrationTotalDays     = calibration.totalDays
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -73,21 +61,20 @@ fun HomeTab(vm: ScrollViewModel, onSettingsClick: () -> Unit) {
 
         Spacer(Modifier.height(32.dp))
 
-        // ── Hero: score ring or calibration ring ──────────────────────────────
-        if (isCalibrating) {
-            CalibrationRingHero(daysRemaining = calibrationDaysRemaining, totalDays = calibrationTotalDays)
-        } else {
-            ScoreRingHero(
-                score          = wellnessScore,
-                trendLabel     = scoreTrendLabel,
-                overallAverage = overallAverage,
-                overallDelta   = overallDelta
-            )
-        }
+        // ── Hero: score ring ──────────────────────────────────────────────────
+        // Shown from day one. Parts of the score that need history (scroll
+        // volume vs. the 7-day average, first-unlock consistency) fall back to
+        // neutral credit until that history exists — see WellnessCalculator.
+        ScoreRingHero(
+            score          = wellnessScore,
+            trendLabel     = scoreTrendLabel,
+            overallAverage = overallAverage,
+            overallDelta   = overallDelta
+        )
 
         // ── Today vs. 30-day average — where today's dot sits against the
         // slow-moving baseline it's meant to nudge up. ─────────────────────────
-        if (!isCalibrating && overallAverage != null) {
+        if (overallAverage != null) {
             Spacer(Modifier.height(16.dp))
             TierScaleBar(currentScore = wellnessScore.total, averageScore = overallAverage)
         }
@@ -108,13 +95,7 @@ fun HomeTab(vm: ScrollViewModel, onSettingsClick: () -> Unit) {
         Spacer(Modifier.height(20.dp))
 
         // ── Score drivers (always visible — never hidden behind an expand) ────
-        if (!isCalibrating) {
-            SubMetricBarsSection(score = wellnessScore)
-        } else {
-            // During calibration the sub-metrics have no meaning yet, so show
-            // the calibration progress card here instead.
-            CalibrationCard(daysRemaining = calibrationDaysRemaining, totalDays = calibrationTotalDays)
-        }
+        SubMetricBarsSection(score = wellnessScore)
 
         Spacer(Modifier.height(40.dp))
     }
@@ -252,78 +233,6 @@ private fun ScoreRingHero(
     }
 }
 
-// ── Calibration ring (shown instead of score ring during the 7-day window) ───
-
-@Composable
-private fun CalibrationRingHero(daysRemaining: Int, totalDays: Int = 7) {
-    val currentDay = (totalDays + 1 - daysRemaining).coerceIn(1, totalDays)
-    val progress   = currentDay / totalDays.toFloat()
-
-    val animatedProgress by animateFloatAsState(
-        targetValue   = progress,
-        animationSpec = tween(900),
-        label         = "calibration_progress"
-    )
-
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(
-            modifier         = Modifier.size(140.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Canvas(modifier = Modifier.size(140.dp)) {
-                val sw  = 11.dp.toPx()
-                val r   = (size.minDimension - sw) / 2f
-                val tl  = Offset((size.width  - r * 2) / 2f, (size.height - r * 2) / 2f)
-                val arc = Size(r * 2, r * 2)
-                drawArc(
-                    color = Slate700, startAngle = 135f, sweepAngle = 270f,
-                    useCenter = false, style = Stroke(sw, cap = StrokeCap.Round),
-                    topLeft = tl, size = arc
-                )
-                drawArc(
-                    color = Blue,
-                    startAngle = 135f,
-                    sweepAngle = 270f * animatedProgress.coerceIn(0f, 1f),
-                    useCenter = false, style = Stroke(sw, cap = StrokeCap.Round),
-                    topLeft = tl, size = arc
-                )
-            }
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(
-                    imageVector        = Icons.Outlined.BarChart,
-                    contentDescription = null,
-                    tint               = Blue,
-                    modifier           = Modifier.size(24.dp)
-                )
-                Text(
-                    "$currentDay/$totalDays",
-                    style         = MaterialTheme.typography.headlineMedium,
-                    fontWeight    = FontWeight.ExtraBold,
-                    color         = Blue,
-                    letterSpacing = (-1).sp
-                )
-            }
-        }
-
-        Spacer(Modifier.height(14.dp))
-
-        Text("Calibrating", style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.ExtraBold, color = Blue)
-
-        Spacer(Modifier.height(6.dp))
-
-        Text("Learning your habits…", style = MaterialTheme.typography.labelMedium, color = Slate400)
-
-        Spacer(Modifier.height(4.dp))
-
-        Text(
-            "$daysRemaining day${if (daysRemaining != 1) "s" else ""} until your score unlocks",
-            style = MaterialTheme.typography.labelSmall,
-            color = Slate500
-        )
-    }
-}
-
 // ── Compact metric strip ──────────────────────────────────────────────────────
 
 @Composable
@@ -414,7 +323,13 @@ private fun SubMetricBarsSection(score: WellnessScore) {
         // Each bar is coloured by its own % of max, on the same tier scale as
         // the overall score (see ScoreComponent), so good vs. weak drivers read
         // at a glance.
-        ScoreComponent("Scroll Volume",    score.scrollVolume,     30)
+        // Scroll volume compares today against a full 7-day average; until that
+        // exists the calculator gives neutral credit, so label it as such
+        // rather than let the bar read as a real judgement.
+        ScoreComponent(
+            "Scroll Volume", score.scrollVolume, 30,
+            subLabel = if (score.baselineScrolls == 0) "Learning your baseline (needs 7 days)" else null
+        )
         ScoreComponent("Session Length",   score.sessionBehaviour, 20)
         ScoreComponent("Unlock Frequency", score.unlockFrequency,  15)
         ScoreComponent("Time Hygiene",     score.timeHygiene,      20)

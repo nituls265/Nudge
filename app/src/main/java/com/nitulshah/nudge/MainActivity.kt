@@ -2,7 +2,6 @@ package com.nitulshah.nudge
 
 import android.Manifest
 import android.content.Context
-import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -102,17 +101,9 @@ class MainActivity : ComponentActivity() {
     private fun recordFirstLaunchDate() {
         val prefs = calibrationPrefs(this)
         if (!prefs.contains(CalibrationPrefs.KEY_FIRST_LAUNCH_DATE)) {
-            // The old code hard-coded an 8-day backdate for ALL builds, which
-            // silently disabled the 7-day calibration period for every real
-            // user. Now only DEBUG builds skip calibration (developer convenience
-            // — no week-long wait on each fresh install); release builds record
-            // the real first-launch date so genuine new users calibrate properly.
-            val isDebuggable = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
-            val firstLaunch = if (isDebuggable) {
-                System.currentTimeMillis() - 8L * 24 * 60 * 60 * 1000   // skip calibration
-            } else {
-                System.currentTimeMillis()                              // real baseline
-            }
+            // Only used to avoid backfilling or scoring days before install;
+            // nothing in the UI is gated on it any more.
+            val firstLaunch = System.currentTimeMillis()
             prefs.edit().putLong(CalibrationPrefs.KEY_FIRST_LAUNCH_DATE, firstLaunch).apply()
         }
     }

@@ -29,10 +29,8 @@ class ScrollViewModel(
     init {
         // Self-heal any past day in the trailing week missing a ScrollDay row —
         // e.g. ResetWorker never ran that night (Doze / OEM battery killer). This
-        // is a data-completeness fix, not an onboarding one: it keeps things like
-        // sevenDayScrollAvg (below) accurate. It must NEVER be used to re-open the
-        // calibration gate — see CalibrationState's doc for why that gate is a pure
-        // function of install date alone.
+        // is a data-completeness fix: it keeps things like sevenDayScrollAvg
+        // (below) accurate.
         viewModelScope.launch(Dispatchers.IO) {
             val installDate = DayBoundary.keyOf(
                 calibrationPrefs(appContext)
@@ -238,25 +236,6 @@ class ScrollViewModel(
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0f)
     }
 
-    // ── Scroll-history gap diagnostic (internal — never gates the UI) ─────────
-    // Counts how many of the trailing 7 days are missing a ScrollDay row, before
-    // the startup backfill (above) has a chance to run. Exposed only so init{}
-    // can log it — see that block's comment for why this must never re-open the
-    // calibration gate, which is a pure function of install date alone
-    // (CalibrationState). Mirrors sevenDayScrollAvg's full-7-day requirement but
-    // without the >=5-scroll filter, so a genuinely light usage day still counts
-    // as "we have data".
-    val scrollBaselineDaysRemaining: StateFlow<Int> = run {
-        val startDate = DayBoundary.daysAgo(7)
-        repo.scrollHistorySince(startDate)
-            .map { dbDays ->
-                val today = DayBoundary.today()
-                val validDays = dbDays.count { it.date != today }
-                maxOf(0, 7 - validDays)
-            }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 7)
-    }
-
     // ── Live wellness score ───────────────────────────────────────────────────
 
     val wellnessScore: StateFlow<WellnessScore> = combine(
@@ -419,28 +398,6 @@ class ScrollViewModel(
     val overallDelta: StateFlow<Int?> = combine(wellnessScore, overallAverage) { live, avg ->
         avg?.let { live.total - it }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
-
-    // Declared after scrollBaselineDaysRemaining on purpose: a coroutine launched from
-    // the earlier init block can read it before it is assigned.
-    init {
-        // Diagnostic only (Logcat tag "Calibration") — not shown in the UI. Logs the
-        // data-completeness signal alongside the real (install-date) gate so "still
-        // calibrating long after install" is debuggable from a bug report, without
-        // that signal ever controlling what the user sees.
-        viewModelScope.launch(Dispatchers.IO) {
-            scrollBaselineDaysRemaining
-                .collect { scrollRemaining ->
-                    val install = readCalibrationState(appContext)
-                    if (install.isCalibrating || scrollRemaining > 0) {
-                        android.util.Log.d(
-                            "Calibration",
-                            "installDaysRemaining=${install.daysRemaining} " +
-                                "scrollHistoryGapDays=$scrollRemaining"
-                        )
-                    }
-                }
-        }
-    }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 

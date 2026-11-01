@@ -1,0 +1,1 @@
+No more 7-day calibration wait: your wellness score and its breakdown show from day one. Pause, Show/Hide Bubble and Reset are no longer locked during your first week. Scroll volume, the one part of the score that compares today with your own 7-day average, is marked "Learning your baseline" and gives neutral credit until that week of history exists.

@@ -507,9 +507,16 @@ class ScrollViewModel(
 
     private suspend fun backfillMissingWellnessScores() {
         val today = DayBoundary.today()
-        val thirtyDaysBack = DayBoundary.daysAgo(30)
+        val installDate = DayBoundary.keyOf(
+            calibrationPrefs(appContext)
+                .getLong(CalibrationPrefs.KEY_FIRST_LAUNCH_DATE, System.currentTimeMillis())
+        )
+        // Never score days before install: with no data they would all rate a perfect
+        // score and show as real history. Also drops such rows written by earlier versions.
+        val thirtyDaysBack = maxOf(DayBoundary.daysAgo(30), installDate)
 
         try {
+            repo.deleteWellnessBefore(installDate)
             val scrollDays   = repo.scrollHistorySince(thirtyDaysBack).firstOrNull()
                                ?: emptyList()
             val scrollByDate = scrollDays.associateBy { it.date }

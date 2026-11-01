@@ -184,13 +184,18 @@ fun HistoryTab(vm: ScrollViewModel, onSettingsClick: () -> Unit) {
         SectionLabel("RAW METRICS")
         Spacer(Modifier.height(12.dp))
 
-        // Tab toggle
-        Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+        // Tab toggle — boxed like the time-range selector so it reads as a control
+        // of its own, not as part of the bottom navigation bar.
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Slate800, RoundedCornerShape(12.dp))
+                .padding(4.dp)
+        ) {
             TabButton("Scrolls", metricTab == "scrolls", MetricScrolls, Modifier.weight(1f)) { metricTab = "scrolls" }
             TabButton("Unlocks", metricTab == "unlocks", MetricUnlocks, Modifier.weight(1f)) { metricTab = "unlocks" }
             TabButton("Time",    metricTab == "time",    MetricTime,    Modifier.weight(1f)) { metricTab = "time"    }
         }
-        Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Slate800))
 
         Spacer(Modifier.height(16.dp))
 
@@ -243,7 +248,7 @@ fun HistoryTab(vm: ScrollViewModel, onSettingsClick: () -> Unit) {
             )
         }
 
-        Spacer(Modifier.height(32.dp))
+        Spacer(Modifier.height(48.dp))
     }
 }
 

@@ -93,6 +93,8 @@ class NudgeRepository private constructor(private val db: ScrollDatabase) {
     suspend fun upsertUnlockDay(day: UnlockDay)     = unlockDao.insertOrUpdate(day)
     suspend fun upsertWellnessDay(day: WellnessDay) = wellnessDao.insertOrUpdate(day)
 
+    suspend fun deleteWellnessBefore(date: String) = wellnessDao.deleteBefore(date)
+
     /**
      * Ensures every date in `[startDate, endDateExclusive)` has a persisted
      * ScrollDay row, inserting a zero-count row for any that are missing.

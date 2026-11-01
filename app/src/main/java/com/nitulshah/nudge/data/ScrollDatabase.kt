@@ -149,6 +149,9 @@ interface WellnessDao {
 
     @Query("SELECT * FROM wellness_history WHERE date = :date")
     suspend fun getDay(date: String): WellnessDay?
+
+    @Query("DELETE FROM wellness_history WHERE date < :date")
+    suspend fun deleteBefore(date: String)
 }
 
 // ── Migrations ───────────────────────────────────────────────────────────────

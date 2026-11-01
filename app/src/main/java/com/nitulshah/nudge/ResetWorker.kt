@@ -100,11 +100,12 @@ class ResetWorker(
             MyAccessibilityService._appScrollCounts.value = emptyMap()
 
             // ── Wellness: compute final score for yesterday and persist ─────────
-            // A day with no scrolls and no unlocks wasn't tracked (accessibility
-            // service off, or phone off) — leave it unscored rather than store a
-            // default-everything perfect 100.
+            // Only score days from when tracking first started. After that, a day
+            // with no scrolls or unlocks means the phone wasn't used and its 100 is
+            // real; before it, there's simply no data to score.
+            val firstTracked = repo.firstTrackedDate()
             if (repo.wellnessDay(yesterday) == null &&
-                WellnessCalculator.hasTrackedActivity(scrollCount, unlockCount)) {
+                firstTracked != null && yesterday >= firstTracked) {
                 // Build top-apps from yesterday's DB app scroll data.
                 // appTotalsBetween is a Flow — collect the first value via firstOrNull().
                 val appTotals = repo.appTotalsBetween(yesterday, today)

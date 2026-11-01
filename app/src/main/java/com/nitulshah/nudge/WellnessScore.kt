@@ -42,7 +42,7 @@ data class WellnessScore(
     val bedtimeScore: Int = -1,        // 0–10 — Time Hygiene sub-component (-1 = unavailable)
     val gapScore: Int = -1,            // 0–6  — Time Hygiene sub-component (-1 = unavailable)
     val consistencyScore: Int = -1,    // 0–4  — Time Hygiene sub-component (-1 = unavailable)
-    val hasData: Boolean = true        // false = no scrolls or unlocks tracked, see hasTrackedActivity
+    val hasData: Boolean = true        // false = no scrolls or unlocks tracked yet today
 )
 
 // ── Risky app registry ────────────────────────────────────────────────────────
@@ -113,10 +113,10 @@ enum class AppCategory(val pts: Int, val label: String) {
 object WellnessCalculator {
 
     /**
-     * Whether a day has anything to score. Scrolls and unlocks are both recorded by
-     * the accessibility service, so a day with neither means tracking was off (or
-     * the phone was) — not a perfect day. Every component defaults to full credit
-     * when its input is missing, so scoring such a day would show a fake 100.
+     * Whether a day recorded any scrolls or unlocks. Once tracking has started, a
+     * day without either is a real day the phone wasn't used, and its 100 is earned;
+     * before tracking ever started (see NudgeRepository.firstTrackedDate) there is
+     * simply no data, so such days are left unscored.
      */
     fun hasTrackedActivity(scrolls: Int, unlocks: Int): Boolean = scrolls > 0 || unlocks > 0
 

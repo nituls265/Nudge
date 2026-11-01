@@ -6,9 +6,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * A day with no scrolls and no unlocks wasn't tracked (accessibility service off).
- * Every component defaults to full credit on missing input, so such a day scores
- * 100 — hasData is what keeps that fake 100 out of history.
+ * A day with no scrolls and no unlocks scores 100 (every component gives full
+ * credit on missing input). That's right once tracking has started (the phone
+ * wasn't used), so hasData only reports whether anything was recorded; the
+ * view model decides whether the day is scored at all.
  */
 class WellnessCalculatorTest {
 
@@ -24,7 +25,7 @@ class WellnessCalculatorTest {
     )
 
     @Test
-    fun `untracked day is a default 100 and is flagged as having no data`() {
+    fun `a day with nothing recorded scores 100 and reports no data`() {
         val s = score(scrolls = 0, unlocks = 0)
         assertEquals(100, s.total)
         assertFalse(s.hasData)

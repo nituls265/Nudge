@@ -210,7 +210,7 @@ insert to Supabase, made only when someone submits the form.
 | `docs/index.html`, `style.css`, `app.js` | The page (plain HTML/CSS/JS) |
 | `docs/qr.svg` | QR code for the download URL, generated locally at build time |
 | `docs/stats.json` | GitHub download count, written by the stats workflow |
-| `docs/assets/` | Demo video + poster (**placeholders** for now), logo |
+| `docs/assets/` | App screenshots (`shot-*.webp`), logo; drop the demo recording here |
 | `scripts/build_site.py` | Regenerates `qr.svg` and syncs config values into the HTML |
 | `scripts/update_stats.py` | Sums release download counts → `docs/stats.json` |
 | `supabase/migrations/20261102120000_waitlist.sql` | `waitlist` table: anon may INSERT an email, nothing else |
@@ -253,8 +253,10 @@ users: F-Droid publishes no download counts, so the page never claims a total.
    `SHOW_COUNTERS`).
 2. Run `pip install -r scripts/requirements.txt && python3 scripts/build_site.py`
    and commit the result. CI (`Site checks`) fails if you forget.
-3. Replace `docs/assets/demo.mp4`, `demo.webm` and `demo-poster.webp` with the
-   real recording (keep them small: 9:16, muted, ~5–8 s loop, ideally < 1 MB).
+3. To add the demo recording: put `demo.mp4` (and optionally `demo.webm`
+   and `demo-poster.webp`) in `docs/assets/`, then in `docs/index.html` swap the
+   demo `<img>` for the commented-out `<video>` block next to it. Keep it small:
+   9:16, muted, a 5–8 s loop, ideally < 1 MB.
 
 **Release constraint:** every GitHub release must attach the APK as exactly
 `app-foss-release.apk` (no version in the name). The download button and QR

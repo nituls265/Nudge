@@ -64,14 +64,24 @@
     <section class="demo wrap" aria-labelledby="demo-title">
       <h2 id="demo-title" class="sr-only">See the bubble in action</h2>
       <figure class="demo-frame">
+        <!--
+          Real screen recording goes here. When docs/assets/demo.mp4 (and
+          optionally demo.webm + demo-poster.webp) exist, replace the <img>
+          below with this block. app.js already handles autoplay blocking and
+          reduced motion.
+
         <video id="demo-video" width="360" height="640" autoplay muted loop playsinline
                poster="assets/demo-poster.webp" aria-describedby="demo-caption">
           <source src="assets/demo.webm" type="video/webm">
           <source src="assets/demo.mp4" type="video/mp4">
           The floating Nudge bubble counts up by one each time you scroll.
         </video>
+        -->
+        <img class="phone-shot" src="assets/shot-bubble.webp" width="540" height="960" fetchpriority="high"
+             alt="The Nudge bubble showing 173 scrolls, floating over a phone’s app drawer. The background is blurred."
+             aria-describedby="demo-caption">
         <figcaption id="demo-caption">
-          The Nudge bubble counting scrolls live, on top of another app.
+          The Nudge bubble (circled) floats over any app and counts each scroll as it happens.
           <span class="autoplay-note" id="autoplay-note" hidden>Autoplay is off in your browser, so press play to watch.</span>
         </figcaption>
       </figure>
@@ -98,6 +108,24 @@
           <p>No account and no ads. Your counts are stored on your phone, and the code is open source under Apache 2.0.</p>
         </li>
       </ul>
+
+      <div class="screens">
+        <figure>
+          <img class="phone-shot" src="assets/shot-home.webp" width="480" height="718" loading="lazy" decoding="async"
+               alt="Nudge home screen: a wellness score of 83 (Balanced), with 171 scrolls, 23 unlocks and 1 hour 50 minutes of screen time today, and a list of score drivers.">
+          <figcaption>Today at a glance</figcaption>
+        </figure>
+        <figure>
+          <img class="phone-shot" src="assets/shot-trends.webp" width="480" height="608" loading="lazy" decoding="async"
+               alt="History screen with 7-day, 30-day and 3-month tabs, showing wellness and time-hygiene bar charts for the last week.">
+          <figcaption>7, 30 and 90-day trends</figcaption>
+        </figure>
+        <figure>
+          <img class="phone-shot" src="assets/shot-apps.webp" width="480" height="558" loading="lazy" decoding="async"
+               alt="Scrolls per day chart, a peak hour of 6 to 7 AM, and scroll sources: WhatsApp 47%, Android 34%.">
+          <figcaption>Where your scrolls go</figcaption>
+        </figure>
+      </div>
     </section>
 
     <!-- 4. Privacy and permissions -->

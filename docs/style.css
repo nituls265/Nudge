@@ -92,10 +92,13 @@ main > section { padding-top: 56px; padding-bottom: 56px; }
 /* Demo */
 .demo { padding-top: 8px; }
 .demo-frame { margin: 0 auto; max-width: 300px; text-align: center; }
-.demo-frame video {
-  width: 100%; aspect-ratio: 9 / 16; border-radius: 28px;
-  background: var(--bg-deep); border: 1px solid var(--line);
-}
+.demo-frame video, .demo-frame .phone-shot { width: 100%; aspect-ratio: 9 / 16; }
+.phone-shot { border-radius: 24px; background: var(--bg-deep); border: 1px solid var(--line); }
+.demo-frame video, .demo-frame .phone-shot { border-radius: 28px; }
+
+.screens { display: grid; gap: 24px; margin-top: 40px; justify-items: center; }
+.screens figure { margin: 0; max-width: 300px; text-align: center; }
+.screens figcaption { color: var(--text); font-weight: 600; }
 figcaption { color: var(--muted); font-size: 0.92rem; margin-top: 12px; }
 .autoplay-note { display: block; margin-top: 4px; }
 
@@ -158,6 +161,7 @@ input[aria-invalid="true"] { border-color: var(--danger); }
 @media (min-width: 40rem) {
   .cta-row { flex-direction: row; justify-content: center; }
   .feature-grid { grid-template-columns: repeat(2, 1fr); }
+  .screens { grid-template-columns: repeat(3, 1fr); align-items: start; gap: 20px; }
 }
 @media (min-width: 56rem) {
   .two-col { grid-template-columns: 1fr 1fr; }

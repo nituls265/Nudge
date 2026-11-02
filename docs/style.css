@@ -34,7 +34,7 @@ a:hover { text-decoration-thickness: 2px; }
 
 :focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
 
-h1, h2, h3 { line-height: 1.2; margin: 0 0 0.6em; letter-spacing: -0.01em; }
+h1, h2, h3 { line-height: 1.2; margin: 0 0 0.6em; letter-spacing: -0.01em; text-wrap: balance; }
 h1 { font-size: clamp(2rem, 7vw, 3.5rem); font-weight: 800; }
 h2 { font-size: clamp(1.5rem, 4.5vw, 2.1rem); font-weight: 750; text-align: center; }
 h3 { font-size: 1.15rem; font-weight: 700; }
@@ -65,7 +65,7 @@ nav a:hover { color: var(--text); }
 /* Sections */
 main > section { padding-top: 56px; padding-bottom: 56px; }
 .hero { text-align: center; padding-top: 64px; }
-.lede { color: var(--muted); font-size: clamp(1.05rem, 2.6vw, 1.25rem); max-width: 40rem; margin: 0 auto 1.6em; }
+.lede { text-wrap: balance; color: var(--muted); font-size: clamp(1.05rem, 2.6vw, 1.25rem); max-width: 40rem; margin: 0 auto 1.6em; }
 .fine { color: var(--muted); font-size: 0.92rem; }
 .center { text-align: center; }
 
@@ -166,5 +166,5 @@ input[aria-invalid="true"] { border-color: var(--danger); }
 @media (min-width: 56rem) {
   .two-col { grid-template-columns: 1fr 1fr; }
   .get-grid { grid-template-columns: repeat(3, 1fr); }
-  .feature-grid { grid-template-columns: repeat(4, 1fr); }
+  .feature-grid { grid-template-columns: repeat(3, 1fr); }
 }

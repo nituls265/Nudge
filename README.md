@@ -196,6 +196,75 @@ exact source and opting in sends data there, same as the shipped APK.
 Server schema, the insert-only Row-Level-Security policies, and the retention
 / DAU-WAU-MAU / stickiness queries live in [`supabase/`](supabase/).
 
+## Landing page (GitHub Pages)
+
+A static, no-framework landing page lives in [`docs/`](docs/) and is served by
+GitHub Pages at **https://nituls265.github.io/Nudge/**. It costs nothing,
+loads no fonts, trackers or third-party scripts, and works with JavaScript off
+(download link and content). Its only outside request is the iPhone waitlist
+insert to Supabase, made only when someone submits the form.
+
+| Path | What it is |
+|---|---|
+| `docs/config.js` | **The one config block** (repo, download URL, F-Droid URL, `SHOW_COUNTERS`, Supabase publishable key, contact email) |
+| `docs/index.html`, `style.css`, `app.js` | The page (plain HTML/CSS/JS) |
+| `docs/qr.svg` | QR code for the download URL, generated locally at build time |
+| `docs/stats.json` | GitHub download count, written by the stats workflow |
+| `docs/assets/` | Demo video + poster (**placeholders** for now), logo |
+| `scripts/build_site.py` | Regenerates `qr.svg` and syncs config values into the HTML |
+| `scripts/update_stats.py` | Sums release download counts → `docs/stats.json` |
+| `supabase/migrations/20261102120000_waitlist.sql` | `waitlist` table: anon may INSERT an email, nothing else |
+
+### Enable GitHub Pages (one-time)
+
+1. On GitHub, open the repo → **Settings** → **Pages** (left sidebar, under
+   "Code and automation").
+2. Under **Build and deployment** → **Source**, choose **Deploy from a branch**.
+3. Under **Branch**, pick **`main`**, then the folder **`/docs`**, and click **Save**.
+4. Wait about a minute, then reload the Pages settings screen. It shows
+   "Your site is live at https://nituls265.github.io/Nudge/". Each push to
+   `main` that touches `docs/` redeploys automatically.
+5. Optional: tick **Enforce HTTPS** (on by default for `github.io`). For a custom
+   domain, enter it under **Custom domain** and add the DNS records GitHub shows.
+
+### Apply the waitlist migration (one-time)
+
+In the Supabase dashboard → **SQL Editor**, paste and run
+`supabase/migrations/20261102120000_waitlist.sql` (or `supabase db push` with
+the CLI). It creates only the new `waitlist` table and doesn't touch `events`,
+`product_events` or `sync_state`. Read sign-ups in **Table Editor → waitlist**.
+The website has no read access to any table. `supabase/tests/waitlist_permissions.sql`
+checks this against a throwaway Postgres, and the **Site checks** workflow runs it in CI.
+
+### Stats workflow
+
+`.github/workflows/stats.yml` runs daily, after every Release run, and on
+demand (**Actions → Site stats → Run workflow**). It sums `download_count`
+across all release assets using only the built-in `GITHUB_TOKEN` and commits
+`docs/stats.json` only when the number changes. It also records whether the
+latest release has `app-foss-release.apk`. If not, the page links to the
+releases page instead of a 404. The page shows "Downloads on GitHub: N" only
+when `SHOW_COUNTERS: true` in `docs/config.js`. That number counts GitHub downloads, not
+users: F-Droid publishes no download counts, so the page never claims a total.
+
+### Editing the page
+
+1. Edit `docs/config.js` (e.g. set `FDROID_URL` once F-Droid is live, or flip
+   `SHOW_COUNTERS`).
+2. Run `pip install -r scripts/requirements.txt && python3 scripts/build_site.py`
+   and commit the result. CI (`Site checks`) fails if you forget.
+3. Replace `docs/assets/demo.mp4`, `demo.webm` and `demo-poster.webp` with the
+   real recording (keep them small: 9:16, muted, ~5–8 s loop, ideally < 1 MB).
+
+**Release constraint:** every GitHub release must attach the APK as exactly
+`app-foss-release.apk` (no version in the name). The download button and QR
+code use `/releases/latest/download/app-foss-release.apk`. `release.yml`
+already does this, so don't rename the asset.
+
+**Analytics:** the site has none. If page analytics are ever wanted, use
+GoatCounter only (cookie-free, no personal data). It is not built in, and adding
+it requires allowing its domain in the page's Content-Security-Policy.
+
 ## Roadmap / known gaps
 
 - No unit/instrumentation tests beyond the scaffolded `ExampleUnitTest` and `ExampleInstrumentedTest`.

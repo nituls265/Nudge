@@ -2,6 +2,11 @@
 # runs on (or `ref`), so the GitHub Release binary always matches the commit
 # pinned in the F-Droid recipe (required for F-Droid's reproducible-build check).
 #
+# The asset MUST stay named exactly `app-foss-release.apk` (no version number):
+# the landing page and its QR code link to
+#   https://github.com/nituls265/Nudge/releases/latest/download/app-foss-release.apk
+# which only resolves if every release uses this same file name.
+#
 # Required repo secrets: NUDGE_KEYSTORE_BASE64, NUDGE_KEYSTORE_PASSWORD,
 # NUDGE_KEY_ALIAS, NUDGE_KEY_PASSWORD.
 name: Release

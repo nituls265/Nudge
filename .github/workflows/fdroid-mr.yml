@@ -20,18 +20,27 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ !github.event.release.prerelease }}
     steps:
+      # Checked out at the default branch (NOT the release tag): this is
+      # what provides scripts/open_fdroid_mr.py. The release's own commit
+      # and version are read separately below via `git show`/`rev-parse`,
+      # without switching the working tree to it, so the automation script
+      # is always the current one even when re-running for an older tag.
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.release.tag_name || inputs.tag }}
+          fetch-depth: 0
 
       - name: Read version info
         id: info
+        env:
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
         run: |
-          VERSION_NAME=$(sed -n 's/^ *versionName = "\(.*\)"/\1/p' app/build.gradle.kts)
-          VERSION_CODE=$(sed -n 's/^ *versionCode = \([0-9]*\)/\1/p' app/build.gradle.kts)
+          git fetch origin "refs/tags/$TAG:refs/tags/$TAG" --depth 1
+          COMMIT=$(git rev-parse "refs/tags/$TAG^{commit}")
+          VERSION_NAME=$(git show "$COMMIT:app/build.gradle.kts" | sed -n 's/^ *versionName = "\(.*\)"/\1/p')
+          VERSION_CODE=$(git show "$COMMIT:app/build.gradle.kts" | sed -n 's/^ *versionCode = \([0-9]*\)/\1/p')
           echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
           echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
-          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "commit=$COMMIT" >> "$GITHUB_OUTPUT"
 
       - name: Open F-Droid metadata MR
         env:

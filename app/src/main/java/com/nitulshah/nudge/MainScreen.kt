@@ -288,7 +288,7 @@ internal fun InsightCard(modifier: Modifier, label: String, value: String, color
                 label.uppercase(),
                 style         = MaterialTheme.typography.labelSmall,
                 color         = Slate500,
-                fontSize      = 10.sp,
+                fontSize      = 12.sp,
                 fontWeight    = FontWeight.Bold,
                 letterSpacing = 0.6.sp
             )
@@ -708,14 +708,14 @@ internal fun AppBreakdownSection(entries: List<Pair<String, Int>>) {
         verticalAlignment     = Alignment.CenterVertically
     ) {
         Text("SCROLL SOURCES", style = MaterialTheme.typography.labelSmall,
-            color = Slate400, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
+            color = Slate400, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
         if (entries.size > 3) {
             Text(
                 if (expanded) "Show less ▲" else "+$hidden more ▼",
                 style      = MaterialTheme.typography.labelSmall,
                 color      = MetricScrolls,
                 fontWeight = FontWeight.Bold,
-                fontSize   = 11.sp,
+                fontSize   = 12.sp,
                 modifier   = Modifier.clickable { expanded = !expanded }
             )
         }
@@ -744,10 +744,10 @@ internal fun AppBreakdownSection(entries: List<Pair<String, Int>>) {
                         color      = MaterialTheme.colorScheme.onBackground,
                         modifier   = Modifier.weight(1f))
                     Text("$count", style = MaterialTheme.typography.labelSmall,
-                        color = Slate500, fontSize = 11.sp)
+                        color = Slate500, fontSize = 12.sp)
                     Spacer(Modifier.width(6.dp))
                     Text("$pct%", style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold, color = MetricScrolls, fontSize = 12.sp)
+                        fontWeight = FontWeight.Bold, color = MetricScrolls, fontSize = 13.sp)
                 }
                 Spacer(Modifier.height(5.dp))
                 Box(
@@ -799,7 +799,7 @@ internal fun ScoreComponent(
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Text(label, style = MaterialTheme.typography.bodySmall, color = Slate400,
-                fontSize = 11.sp, modifier = Modifier.width(130.dp))
+                fontSize = 13.sp, modifier = Modifier.width(140.dp))
             Box(
                 modifier = Modifier.weight(1f).height(5.dp)
                     .background(Slate900, RoundedCornerShape(3.dp))
@@ -815,16 +815,16 @@ internal fun ScoreComponent(
                 "$points/$maxPts",
                 style      = MaterialTheme.typography.labelSmall,
                 color      = if (isFull) barColor else Slate500,
-                fontSize   = 10.sp,
+                fontSize   = 12.sp,
                 fontWeight = if (isFull) FontWeight.Bold else FontWeight.Normal,
-                modifier   = Modifier.width(32.dp),
+                modifier   = Modifier.width(38.dp),
                 textAlign  = TextAlign.End
             )
         }
         if (subLabel != null) {
             Text(subLabel, style = MaterialTheme.typography.labelSmall,
-                color = Slate500, fontSize = 9.sp,
-                modifier = Modifier.padding(start = 140.dp, top = 2.dp))
+                color = Slate500, fontSize = 11.sp,
+                modifier = Modifier.padding(start = 150.dp, top = 2.dp))
         }
     }
 }
@@ -1054,12 +1054,12 @@ internal fun TierScaleBar(currentScore: Int, averageScore: Int? = null) {
         }
         Spacer(Modifier.height(3.dp))
         Row(modifier = Modifier.fillMaxWidth()) {
-            Text("0",   Modifier.weight(30f), fontSize = 8.sp, color = Slate500)
-            Text("30",  Modifier.weight(20f), fontSize = 8.sp, color = Slate500)
-            Text("50",  Modifier.weight(20f), fontSize = 8.sp, color = Slate500)
-            Text("70",  Modifier.weight(15f), fontSize = 8.sp, color = Slate500)
-            Text("85",  Modifier.weight(14f), fontSize = 8.sp, color = Slate500)
-            Text("100",                       fontSize = 8.sp, color = Slate500)
+            Text("0",   Modifier.weight(30f), fontSize = 10.sp, color = Slate500)
+            Text("30",  Modifier.weight(20f), fontSize = 10.sp, color = Slate500)
+            Text("50",  Modifier.weight(20f), fontSize = 10.sp, color = Slate500)
+            Text("70",  Modifier.weight(15f), fontSize = 10.sp, color = Slate500)
+            Text("85",  Modifier.weight(14f), fontSize = 10.sp, color = Slate500)
+            Text("100",                       fontSize = 10.sp, color = Slate500)
         }
         Spacer(Modifier.height(4.dp))
         Row(modifier = Modifier.fillMaxWidth()) {
@@ -1074,12 +1074,12 @@ internal fun TierScaleBar(currentScore: Int, averageScore: Int? = null) {
                         imageVector        = tierImageVector(tier),
                         contentDescription = null,
                         tint               = tierColor,
-                        modifier           = Modifier.size(7.dp)
+                        modifier           = Modifier.size(8.dp)
                     )
                     Spacer(Modifier.width(2.dp))
                     Text(
                         tier.label,
-                        fontSize   = 7.sp,
+                        fontSize   = 9.sp,
                         color      = tierColor,
                         fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
                         maxLines   = 1

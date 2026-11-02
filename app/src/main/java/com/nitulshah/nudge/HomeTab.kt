@@ -438,7 +438,7 @@ private fun MetricPill(label: String, value: String, color: Color) {
                 label,
                 style    = MaterialTheme.typography.labelSmall,
                 color    = Slate400,
-                fontSize = 10.5.sp,
+                fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold
             )
         }
@@ -454,7 +454,7 @@ private fun SubMetricBarsSection(score: WellnessScore) {
             "SCORE DRIVERS",
             style         = MaterialTheme.typography.labelSmall,
             color         = Slate400,
-            fontSize      = 10.sp,
+            fontSize      = 12.sp,
             fontWeight    = FontWeight.Bold,
             letterSpacing = 0.8.sp
         )
@@ -507,7 +507,7 @@ private fun FlaggedAppCallout(apps: List<String>) {
             "App quality reduced by",
             style    = MaterialTheme.typography.labelSmall,
             color    = Slate400,
-            fontSize = 11.sp,
+            fontSize = 12.sp,
             modifier = Modifier.weight(1f)
         )
         Row(
@@ -520,7 +520,7 @@ private fun FlaggedAppCallout(apps: List<String>) {
                     style      = MaterialTheme.typography.labelSmall,
                     color      = orange,
                     fontWeight = FontWeight.SemiBold,
-                    fontSize   = 11.sp,
+                    fontSize   = 12.sp,
                     modifier   = Modifier
                         .background(orange.copy(alpha = 0.12f), RoundedCornerShape(4.dp))
                         .padding(horizontal = 7.dp, vertical = 3.dp)

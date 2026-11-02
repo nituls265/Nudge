@@ -1,0 +1,1 @@
+Nudge no longer asks Android for access to screen content at all, so it can only see that a scroll happened and in which app. Turning on scroll tracking now says this clearly. Builds without analytics (F-Droid and GitHub) no longer show an Anonymous analytics switch that did nothing. New store screenshots.

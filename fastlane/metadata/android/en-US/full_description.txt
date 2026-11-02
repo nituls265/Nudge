@@ -20,7 +20,7 @@ This build has no analytics or telemetry of any kind — that code is compiled o
 <b>Permissions</b>
 
 <ul>
-<li>Accessibility Service — to detect scroll gestures across other apps. Nudge never reads on-screen text or content, only scroll/window-change events.</li>
+<li>Accessibility Service — to detect scroll gestures across other apps. Nudge does not even request Android's permission to read screen content, so it cannot see on-screen text or anything else, only that a scroll or window change happened and in which app.</li>
 <li>Display over other apps — for the optional floating bubble.</li>
 <li>Notifications — for reset/reminder notifications.</li>
 <li>Internet — used only if you opt into laptop-scroll sync (see above); otherwise never used.</li>

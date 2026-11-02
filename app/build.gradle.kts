@@ -14,8 +14,8 @@ android {
         applicationId = "com.nitulshah.nudge"
         minSdk = 24
         targetSdk = 36
-        versionCode = 15
-        versionName = "1.12"
+        versionCode = 16
+        versionName = "1.13"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

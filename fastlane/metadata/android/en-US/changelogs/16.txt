@@ -1,0 +1,1 @@
+Bigger, easier-to-read text on the Home screen: Score Drivers, Scroll Volume and the other score bars, metric labels, and the tier scale were too small on some screens and have been increased.

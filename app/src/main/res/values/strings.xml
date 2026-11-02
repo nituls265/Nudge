@@ -1,4 +1,4 @@
 <resources>
     <string name="app_name">Nudge</string>
-    <string name="accessibility_description">This app counts your scrolls to help you track your phone usage.</string>
+    <string name="accessibility_description">Nudge counts your scrolls to help you track your phone use. It only learns that a scroll happened and in which app. It cannot read text or anything else on your screen.</string>
 </resources>

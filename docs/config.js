@@ -1,0 +1,26 @@
+/*
+ * Nudge landing page — the ONE place to edit site settings.
+ *
+ * After editing, run from the repo root:
+ *     python3 scripts/build_site.py
+ * which regenerates docs/qr.svg from DOWNLOAD_URL and copies these values
+ * into the static HTML (links that must work with JavaScript disabled, and
+ * the Content-Security-Policy). CI fails if you forget.
+ *
+ * SUPABASE_ANON_KEY is the *publishable* key: safe to ship in a static site.
+ * It can only INSERT an email into `waitlist` (see
+ * supabase/migrations/20261102120000_waitlist.sql). NEVER put a service_role /
+ * secret key in this file or anywhere in this repository.
+ */
+window.NUDGE_CONFIG = Object.freeze({
+  GITHUB_REPO: "nituls265/Nudge",
+  // Every GitHub release MUST attach the APK under exactly this file name
+  // (no version number), or this "latest" link breaks. release.yml does this.
+  DOWNLOAD_URL: "https://github.com/nituls265/Nudge/releases/latest/download/app-foss-release.apk",
+  APK_ASSET_NAME: "app-foss-release.apk",
+  FDROID_URL: "",            // F-Droid button stays hidden until this is set
+  SHOW_COUNTERS: false,      // true = show "Downloads on GitHub: N" from stats.json
+  SUPABASE_URL: "https://mvfdwgcknmskadhlujgk.supabase.co",
+  SUPABASE_ANON_KEY: "sb_publishable_evEXLt2hGLkCHbIY7yweaA_SSu2XwWX",
+  CONTACT_EMAIL: "nituls265@gmail.com",
+});

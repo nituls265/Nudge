@@ -1,0 +1,63 @@
+# Refreshes docs/stats.json (GitHub release download count + whether the
+# latest release has the fixed-name APK) for the landing page.
+#
+# Runs server-side only: the website never calls the GitHub API or Supabase
+# for stats. Uses only the built-in GITHUB_TOKEN; no other secrets.
+# Commits only when the numbers actually change.
+name: Site stats
+
+on:
+  schedule:
+    - cron: "17 3 * * *"   # daily, 03:17 UTC
+  workflow_dispatch:
+  # Refresh right after a release build finishes, so a missing APK asset is
+  # caught (and the site falls back to the releases page) within minutes.
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: site-stats
+  cancel-in-progress: false
+
+jobs:
+  stats:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Update docs/stats.json
+        id: stats
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/update_stats.py "$GITHUB_REPOSITORY"
+
+      - name: Validate stats.json
+        run: |
+          python3 - <<'EOF'
+          import json
+          d = json.load(open("docs/stats.json"))
+          assert isinstance(d["github_downloads"], int) and d["github_downloads"] >= 0
+          assert isinstance(d["apk_available"], bool)
+          assert isinstance(d["updated"], str) and d["updated"].endswith("Z")
+          print("stats.json OK:", d)
+          EOF
+
+      - name: Warn if the APK asset is missing
+        if: steps.stats.outputs.apk_available == 'false'
+        run: echo "::warning::Latest release has no app-foss-release.apk asset; the site is linking to the releases page instead."
+
+      - name: Commit if changed
+        if: steps.stats.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/stats.json
+          git commit -m "Update site stats [skip ci]"
+          git pull --rebase origin "${{ github.event.repository.default_branch }}"
+          git push origin "HEAD:${{ github.event.repository.default_branch }}"

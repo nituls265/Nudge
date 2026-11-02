@@ -1,0 +1,65 @@
+# Checks for the landing page (docs/) and the waitlist migration.
+name: Site checks
+
+on:
+  push:
+    branches: [main]
+    paths: ["docs/**", "scripts/**", "supabase/**", ".github/workflows/site.yml"]
+  pull_request:
+    paths: ["docs/**", "scripts/**", "supabase/**", ".github/workflows/site.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  site:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generated files match docs/config.js
+        run: |
+          pip install -r scripts/requirements.txt
+          python3 scripts/build_site.py --check
+
+      - name: No secret keys committed
+        run: |
+          # Publishable keys (sb_publishable_…, legacy anon JWT) are fine.
+          # A secret key or any JWT whose payload says service_role is not.
+          if git grep -nI -E 'sb_secret_[A-Za-z0-9_-]+' -- . ':!.github/workflows/site.yml'; then
+            echo "::error::Supabase secret key found"; exit 1
+          fi
+          for jwt in $(git grep -hoI -E 'eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+' || true); do
+            payload=$(echo "$jwt" | cut -d. -f2 | tr '_-' '/+')
+            while [ $(( ${#payload} % 4 )) -ne 0 ]; do payload="$payload="; done
+            if echo "$payload" | base64 -d 2>/dev/null | grep -q '"role":"service_role"'; then
+              echo "::error::service_role JWT found"; exit 1
+            fi
+          done
+          echo "No secret keys found."
+
+  waitlist-migration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply migration and check anon is insert-only
+        env:
+          PGHOST: localhost
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGDATABASE: postgres
+        run: |
+          psql -X -q -f supabase/tests/waitlist_permissions.sql 2>&1 | tee out.txt
+          # T2..T8 must each fail (8 errors), T1 must insert exactly one row.
+          errors=$(grep -c 'ERROR:' out.txt)
+          [ "$errors" -eq 8 ] || { echo "::error::expected 8 denied statements, got $errors"; exit 1; }
+          grep -q '(1 row)' out.txt || { echo "::error::expected exactly one waitlist row"; exit 1; }

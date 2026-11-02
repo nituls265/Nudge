@@ -64,24 +64,17 @@
     <section class="demo wrap" aria-labelledby="demo-title">
       <h2 id="demo-title" class="sr-only">See the bubble in action</h2>
       <figure class="demo-frame">
-        <!--
-          Real screen recording goes here. When docs/assets/demo.mp4 (and
-          optionally demo.webm + demo-poster.webp) exist, replace the <img>
-          below with this block. app.js already handles autoplay blocking and
-          reduced motion.
-
         <video id="demo-video" width="360" height="640" autoplay muted loop playsinline
+               preload="auto" fetchpriority="high"
                poster="assets/demo-poster.webp" aria-describedby="demo-caption">
           <source src="assets/demo.webm" type="video/webm">
           <source src="assets/demo.mp4" type="video/mp4">
-          The floating Nudge bubble counts up by one each time you scroll.
+          The floating Nudge bubble counts every scroll live. Keep scrolling fast and it glows amber,
+          then sends a notification, then shows a full-screen prompt to take a short break.
         </video>
-        -->
-        <img class="phone-shot" src="assets/shot-bubble.webp" width="540" height="960" fetchpriority="high"
-             alt="The Nudge bubble showing 173 scrolls, floating over a phone’s app drawer. The background is blurred."
-             aria-describedby="demo-caption">
         <figcaption id="demo-caption">
-          The Nudge bubble (circled) floats over any app and counts each scroll as it happens.
+          Real screen recording: the bubble counts every scroll, glows amber past your limit, then
+          nudges with a notification and, if you keep going, a full-screen pause.
           <span class="autoplay-note" id="autoplay-note" hidden>Autoplay is off in your browser, so press play to watch.</span>
         </figcaption>
       </figure>

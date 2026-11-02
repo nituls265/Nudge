@@ -71,9 +71,11 @@ def main():
     clone_url = f"https://oauth2:{token}@gitlab.com/{FORK_PATH}.git"
     upstream_url = f"https://gitlab.com/{UPSTREAM_PATH}.git"
 
-    run(["git", "clone", "--depth", "1", clone_url, workdir])
+    # Full clone/fetch, not shallow: GitLab rejects a push built on
+    # truncated ("shallow") history with "shallow update not allowed".
+    run(["git", "clone", clone_url, workdir])
     run(["git", "-C", workdir, "remote", "add", "upstream", upstream_url])
-    run(["git", "-C", workdir, "fetch", "--depth", "1", "upstream", "master"])
+    run(["git", "-C", workdir, "fetch", "upstream", "master"])
     run(["git", "-C", workdir, "checkout", "-B", branch, "upstream/master"])
 
     recipe = os.path.join(workdir, RECIPE_PATH)

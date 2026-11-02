@@ -23,4 +23,8 @@ window.NUDGE_CONFIG = Object.freeze({
   SUPABASE_URL: "https://mvfdwgcknmskadhlujgk.supabase.co",
   SUPABASE_ANON_KEY: "sb_publishable_evEXLt2hGLkCHbIY7yweaA_SSu2XwWX",
   CONTACT_EMAIL: "nituls265@gmail.com",
+  // Search-console ownership tokens. Leave blank until you have one — the
+  // build script only emits the <meta> tag when the value is non-empty.
+  GSC_VERIFICATION: "",   // Google Search Console HTML-tag token
+  BING_VERIFICATION: "",  // Bing Webmaster Tools HTML-tag token
 });

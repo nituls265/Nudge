@@ -1,0 +1,42 @@
+# After every GitHub release, opens a merge request against fdroid/fdroiddata
+# (via the nituls265/fdroiddata fork) adding a Build entry for the new
+# version, so the F-Droid recipe doesn't need updating by hand each release.
+#
+# Requires a repo secret FDROID_GITLAB_TOKEN: a GitLab personal access token
+# (scope: api) on the account that owns the fdroiddata fork.
+name: F-Droid metadata MR
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  open-mr:
+    runs-on: ubuntu-latest
+    if: ${{ !github.event.release.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Read version info
+        id: info
+        run: |
+          VERSION_NAME=$(sed -n 's/^ *versionName = "\(.*\)"/\1/p' app/build.gradle.kts)
+          VERSION_CODE=$(sed -n 's/^ *versionCode = \([0-9]*\)/\1/p' app/build.gradle.kts)
+          echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+          echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Open F-Droid metadata MR
+        env:
+          GITLAB_TOKEN: ${{ secrets.FDROID_GITLAB_TOKEN }}
+          VERSION_NAME: ${{ steps.info.outputs.version_name }}
+          VERSION_CODE: ${{ steps.info.outputs.version_code }}
+          COMMIT: ${{ steps.info.outputs.commit }}
+        run: |
+          if [ -z "$GITLAB_TOKEN" ]; then
+            echo "::error::FDROID_GITLAB_TOKEN secret is not set; skipping."
+            exit 1
+          fi
+          python3 scripts/open_fdroid_mr.py

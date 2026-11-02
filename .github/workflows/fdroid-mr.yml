@@ -9,6 +9,11 @@ name: F-Droid metadata MR
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to open the MR for (e.g. v1.13). Only needed to manually re-run for a release that predates this workflow."
+        required: true
 
 jobs:
   open-mr:
@@ -17,7 +22,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
 
       - name: Read version info
         id: info

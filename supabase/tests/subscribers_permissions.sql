@@ -2,7 +2,7 @@
 -- Run against a THROWAWAY Postgres (never your Supabase project), repo root:
 --   createdb nudge_subs_test
 --   psql -d nudge_subs_test -X -q -f supabase/tests/subscribers_permissions.sql
--- Expect exactly 9 "ERROR:" lines (the steps marked "expect error") and a
+-- Expect exactly 10 "ERROR:" lines (the steps marked "expect error") and a
 -- final "RESULT: PASS". `net` and `vault` stand in for pg_net and Vault.
 \set ON_ERROR_STOP 0
 
@@ -31,10 +31,12 @@ end $$;
 \i supabase/migrations/20261103120000_subscribers.sql
 \i supabase/migrations/20261103120100_subscribers_guide_mailer.sql
 \i supabase/migrations/20261103130000_subscribers_join_rpc.sql
+\i supabase/migrations/20261103140000_subscribers_checkin_cron.sql
 \echo '--- apply all twice (idempotent)'
 \i supabase/migrations/20261103120000_subscribers.sql
 \i supabase/migrations/20261103120100_subscribers_guide_mailer.sql
 \i supabase/migrations/20261103130000_subscribers_join_rpc.sql
+\i supabase/migrations/20261103140000_subscribers_checkin_cron.sql
 
 set role anon;
 \echo '--- S1 join, box unticked, mailer not configured (expect ok, no mail)'
@@ -92,6 +94,21 @@ set role anon;
 select public.join_challenge('f@example.com', false);
 reset role;
 
+-- Day-30 check-ins. Mailer back up; a, gone and e signed up 31 days ago,
+-- f is recent. Expect check-ins for a and e only (gone unsubscribed).
+delete from net.fail;
+update public.subscribers set created_at = now() - interval '31 days'
+ where email in ('a@example.com', 'gone@example.com', 'e@example.com');
+set role anon;
+\echo '--- S17 anon runs the check-in job (expect error)'
+select public.subscribers_send_checkins();
+reset role;
+create temp table checkin_runs (n integer);
+\echo '--- S18 check-in job (expect 2), then again (expect 0)'
+insert into checkin_runs select public.subscribers_send_checkins();
+insert into checkin_runs select public.subscribers_send_checkins();
+select n from checkin_runs;
+
 \echo '--- final state (as owner)'
 select email, wants_updates, guide_queued_at is not null as queued, unsubscribed_at is not null as unsub
   from public.subscribers order by created_at, email;
@@ -105,9 +122,16 @@ select case when
     and (select count(*) from public.subscribers where guide_queued_at is not null) = 1
     and (select guide_queued_at is not null from public.subscribers where email = 'e@example.com')
     and (select count(*) from public.subscribers where email = 'f@example.com') = 1
-    and (select count(*) from net.calls) = 1
+    and (select count(*) from net.calls where not body ? 'type') = 1
     and (select body = '{"email": "e@example.com", "secret": "s3cret"}'::jsonb
-           and url = 'https://script.example/exec' from net.calls)
+           and url = 'https://script.example/exec' from net.calls where not body ? 'type')
+    and (select array_agg(n order by n desc) from checkin_runs) = array[2, 0]
+    and (select count(*) from net.calls where body->>'type' = 'checkin') = 2
+    and (select array_agg(body->>'email' order by body->>'email') from net.calls where body->>'type' = 'checkin')
+          = array['a@example.com', 'e@example.com']
+    and (select array_agg(email order by email) from public.subscribers where checkin_sent_at is not null)
+          = array['a@example.com', 'e@example.com']
+    and not has_function_privilege('anon', 'public.subscribers_send_checkins()', 'EXECUTE')
     and not has_table_privilege('anon', 'public.subscribers', 'INSERT')
     and not has_column_privilege('anon', 'public.subscribers', 'email', 'INSERT')
     and not has_table_privilege('anon', 'public.subscribers', 'SELECT')

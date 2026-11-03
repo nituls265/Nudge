@@ -1,0 +1,45 @@
+-- Saved queries for the 30-day challenge list. Run each one on its own in the
+-- Supabase SQL Editor (select the lines, then Run). Never put these in client
+-- code: the website can only insert, by design.
+
+-- 1. WEEKLY: who is due for the day-30 check-in?
+--    Copy the emails into Gmail's BCC field and send email/day30-checkin.txt.
+select email, created_at
+  from public.subscribers
+ where checkin_sent_at is null
+   and unsubscribed_at is null
+   and created_at <= now() - interval '30 days'
+ order by created_at;
+
+-- 2. Right after sending: mark those same people as done, so they don't
+--    show up again next week. (Same filter as query 1.)
+update public.subscribers
+   set checkin_sent_at = now()
+ where checkin_sent_at is null
+   and unsubscribed_at is null
+   and created_at <= now() - interval '30 days';
+
+-- 3. Someone replied STOP: no more emails of any kind.
+--    Replace the address, then run.
+update public.subscribers
+   set unsubscribed_at = now(), wants_updates = false
+ where lower(email) = lower('person@example.com');
+
+-- 4. Someone asked to be deleted entirely (GDPR / "forget me").
+delete from public.subscribers
+ where lower(email) = lower('person@example.com');
+
+-- 5. A few times a year: who wants updates and articles?
+select email
+  from public.subscribers
+ where wants_updates
+   and unsubscribed_at is null
+ order by created_at;
+
+-- 6. Quick numbers.
+select count(*)                                            as total_signups,
+       count(*) filter (where wants_updates)               as want_updates,
+       count(*) filter (where guide_queued_at is not null) as guide_emailed,
+       count(*) filter (where checkin_sent_at is not null) as checkin_sent,
+       count(*) filter (where unsubscribed_at is not null) as unsubscribed
+  from public.subscribers;

@@ -165,6 +165,7 @@
           <p class="fine">Free APK, signed and built from the public source by GitHub Actions. Your phone may ask you to allow installs from your browser the first time.</p>
           <p class="fine"><a data-href-tpl="https://github.com/{GITHUB_REPO}/releases/latest" href="https://github.com/nituls265/Nudge/releases/latest">Release notes and all downloads</a></p>
           <p class="fine stat" id="stat-downloads" hidden></p>
+          <button type="button" class="linklike" id="open-guide" hidden aria-controls="after-download">Setup guide and 30-day challenge</button>
         </div>
 
         <div class="card get-qr" id="card-qr">
@@ -202,6 +203,48 @@
           </noscript>
         </div>
       </div>
+
+      <!-- Shown by app.js after a Download tap (or "Setup guide" button). Never blocks the download. -->
+      <div class="card after-download" id="after-download" tabindex="-1" aria-labelledby="ad-title" hidden>
+        <div class="ad-guide">
+          <h3 id="ad-title">Your download has started</h3>
+          <p class="fine">Set up Nudge in about two minutes:</p>
+          <ol class="steps">
+            <li><strong>Install.</strong> Open the downloaded file from your notifications or Downloads. If Android asks, allow installs from your browser, then tap Install.</li>
+            <li><strong>Turn on tracking.</strong> Open Nudge and follow the Home screen to switch it on under Settings → Accessibility. If Android says the setting is restricted: Settings → Apps → Nudge → ⋮ → <em>Allow restricted settings</em>, then try again.</li>
+            <li><strong>Show the bubble</strong> (optional). Allow “Display over other apps”, then tap Show Bubble to see your live count.</li>
+            <li><strong>Give it a week.</strong> Your score works from day one; its scroll-volume part learns your baseline over the first 7 days.</li>
+          </ol>
+        </div>
+        <div class="ad-challenge">
+          <h3 id="ch-title">Take the 30-day challenge</h3>
+          <p class="fine" id="ch-intro">
+            <span class="guide-email" hidden>Get this setup guide by email, plus</span><span class="no-guide-email">Leave your email and we’ll send</span>
+            one check-in at day 30 to ask how it’s going. Reply anytime; a real person reads every reply.
+          </p>
+          <form id="challenge-form" novalidate>
+            <fieldset id="challenge-fieldset" disabled>
+              <legend class="sr-only">30-day challenge</legend>
+              <label for="ch-email">Email address</label>
+              <div class="field-row">
+                <input id="ch-email" name="email" type="email" inputmode="email" autocomplete="email"
+                       maxlength="254" required aria-describedby="ch-intro ch-promise ch-status">
+                <button class="btn btn-primary" type="submit">Join the challenge</button>
+              </div>
+              <label class="check">
+                <input id="ch-updates" name="wants_updates" type="checkbox">
+                <span>Also send me Nudge updates and articles on mindful phone use, a few times a year.</span>
+              </label>
+              <div class="hp" aria-hidden="true">
+                <label for="ch-website">Leave this empty</label>
+                <input id="ch-website" name="website" type="text" tabindex="-1" autocomplete="off">
+              </div>
+            </fieldset>
+          </form>
+          <p class="fine" id="ch-promise">Optional. Never shared, never sold. Reply STOP to any email to unsubscribe.</p>
+          <p class="status" id="ch-status" role="status" aria-live="polite"></p>
+        </div>
+      </div>
     </section>
   </main>
 
@@ -210,7 +253,7 @@
     <div class="wrap footer-inner">
       <p><a data-href-tpl="https://github.com/{GITHUB_REPO}" href="https://github.com/nituls265/Nudge">Source on GitHub</a> ·
          <a data-href-tpl="https://github.com/{GITHUB_REPO}/blob/main/LICENSE" href="https://github.com/nituls265/Nudge/blob/main/LICENSE">Apache License 2.0</a></p>
-      <p>Privacy: this site has no cookies and no analytics, and it loads nothing from other sites. The only outside request is the one you choose to make: joining the waitlist sends your email to our Supabase database, and we use it for one launch email.</p>
+      <p>Privacy: this site has no cookies and no analytics, and it loads nothing from other sites. The only outside requests are the ones you choose to make: joining the iPhone waitlist or the 30-day challenge sends your email to our Supabase database, and we use it only for what you signed up for.</p>
       <p>Questions or feedback: <a data-href-tpl="mailto:{CONTACT_EMAIL}" href="mailto:nituls265@gmail.com" data-text-tpl="{CONTACT_EMAIL}">nituls265@gmail.com</a></p>
     </div>
   </footer>

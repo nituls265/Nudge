@@ -236,6 +236,66 @@ the CLI). It creates only the new `waitlist` table and doesn't touch `events`,
 The website has no read access to any table. `supabase/tests/waitlist_permissions.sql`
 checks this against a throwaway Postgres, and the **Site checks** workflow runs it in CI.
 
+### 30-day challenge emails
+
+After someone taps **Download for Android**, the page shows a setup guide and
+an optional form: email for a one-time day-30 check-in, plus an unticked box
+for "updates and articles, a few times a year". Sign-ups go to the
+`subscribers` table (insert-only from the website, separate from the waitlist
+and from all app data).
+
+**1. Create the table (one-time).** Supabase → **SQL Editor** → **+ New query**
+→ paste `supabase/migrations/20261103120000_subscribers.sql` → **Run**.
+
+**2. Weekly routine (about 5 minutes).** In the SQL Editor, run the queries in
+`supabase/queries/subscribers.sql`:
+1. Query 1 lists who is due for the day-30 check-in.
+2. Send them `email/day30-checkin.txt` from the Nudge Gmail with their
+   addresses in **BCC**. Replies come back to the same inbox.
+3. Query 2 marks them as sent.
+
+Someone replies STOP → query 3. Someone asks to be deleted → query 4.
+Updates mailing (a few times a year) → query 5.
+
+**3. Automatic startup-guide email (one-time, about 15 minutes, free).**
+Supabase pings a Google Apps Script running in the Nudge Gmail account, which
+emails the guide from that account. The script's URL and a shared secret live
+in Supabase Vault; nothing secret is committed.
+
+1. Create the Nudge Gmail account and sign in to it.
+2. Supabase → SQL Editor → **+ New query** → paste
+   `supabase/migrations/20261103120100_subscribers_guide_mailer.sql` → **Run**.
+3. Make up a long random secret (e.g. 30+ random characters from a password
+   manager) and keep it handy for steps 5 and 8.
+4. While signed in to the Nudge Gmail, open https://script.google.com →
+   **New project**. Name it "Nudge mailer". Replace the editor contents with
+   `email/apps-script/Code.gs` and click **Save**.
+5. **Project Settings** (gear icon) → **Script Properties** → **Add script
+   property**: name `MAILER_SECRET`, value = your secret → **Save**.
+6. Back in **Editor**, choose `sendTestToMyself` in the function dropdown →
+   **Run** → allow the Gmail permission (pick the Nudge account; if Google
+   says the app isn't verified, click **Advanced → Go to Nudge mailer**).
+   Check the Nudge inbox for the test email.
+7. **Deploy → New deployment** → gear next to "Select type" → **Web app**.
+   Execute as: **Me**. Who has access: **Anyone**. **Deploy**, then copy the
+   **Web app URL** (ends in `/exec`).
+8. Supabase → SQL Editor → **+ New query**, fill in both values, **Run**:
+   ```sql
+   select vault.create_secret('PASTE_WEB_APP_URL', 'nudge_mailer_url');
+   select vault.create_secret('PASTE_YOUR_SECRET', 'nudge_mailer_secret');
+   ```
+9. Test: sign up on the site with an address you can check (not the Nudge
+   Gmail). The guide should arrive within a minute, and **Table Editor →
+   subscribers** shows a time in `guide_queued_at`.
+10. In `docs/config.js` set `GUIDE_EMAIL_ENABLED: true` (the form then
+    promises the guide by email), run `python3 scripts/build_site.py`, commit.
+
+Changed `Code.gs` later? **Deploy → Manage deployments → ✏️ → Version: New
+version → Deploy** keeps the same URL. The script sends at most 60 guides a
+day (Gmail allows 100), so bulk fake sign-ups can't exhaust the account.
+`supabase/tests/subscribers_permissions.sql` checks the table permissions and
+the trigger (with stand-ins for pg_net and Vault) in CI.
+
 ### Stats workflow
 
 `.github/workflows/stats.yml` runs daily, after every Release run, and on

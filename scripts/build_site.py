@@ -92,6 +92,16 @@ def render_html(src: str, cfg: dict) -> str:
         lambda m: m.group(1) + html.escape(fill(m.group(3), cfg)) + m.group(5),
         out, flags=re.S,
     )
+
+    # Search-console verification <meta> tags: emit only when the config value
+    # is non-empty (an empty verification token is worse than no tag at all).
+    def strip_if_empty(m: re.Match) -> str:
+        tag = m.group(0)
+        key = re.search(r'data-verify-tpl="([A-Z_]+)"', tag)
+        if key and not cfg.get(key.group(1)):
+            return ""
+        return tag
+    out = re.sub(r'[ \t]*<meta\b[^>]*data-verify-tpl="[A-Z_]+"[^>]*>\n?', strip_if_empty, out)
     return out
 
 

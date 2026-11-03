@@ -26,4 +26,8 @@ window.NUDGE_CONFIG = Object.freeze({
   // true once the Apps Script mailer is set up (README: "Automatic startup-guide
   // email"). Only changes the wording: the form promises the guide by email.
   GUIDE_EMAIL_ENABLED: true,
+  // Search-console ownership tokens. Leave blank until you have one — the
+  // build script only emits the <meta> tag when the value is non-empty.
+  GSC_VERIFICATION: "",   // Google Search Console HTML-tag token
+  BING_VERIFICATION: "",  // Bing Webmaster Tools HTML-tag token
 });

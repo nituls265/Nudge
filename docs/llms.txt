@@ -1,0 +1,37 @@
+> Nudge — a free, open-source Android app to stop doomscrolling (doomscrolling prevention and digital wellbeing).
+> This file's effect on AI-assistant citation or discovery is unproven; it is
+> included as a no-cost experiment, not a known-effective technique.
+
+# Nudge
+
+Nudge is a free, open-source Android app with a live scroll counter and a
+daily wellness score (0-100). A floating bubble shows the running scroll
+count over any app, and gentle nudges (notification, then full-screen
+prompt) appear when you scroll fast. No account, no ads.
+
+Key facts:
+- Platform: Android 7.0+ (minSdk 24). No iOS app yet; an iPhone waitlist is
+  on the home page.
+- License: Apache License 2.0. Source: https://github.com/nituls265/Nudge
+- Price: free, no in-app purchases.
+- Permissions: Android Accessibility service (to detect scroll gestures in
+  other apps) and "Display over other apps" (to show the floating bubble).
+  Neither reads on-screen text, messages, images, or passwords.
+- Privacy: scroll/usage history is stored locally on the device by default.
+  Analytics are opt-in and off by default, and absent entirely from the
+  published APK and F-Droid build. An optional, off-by-default
+  Chrome-extension sync feature can send daily counts to the user's own
+  laptop.
+- Wellness score: built from five drivers — scroll volume, session
+  behaviour, unlock frequency, time hygiene, and app quality — mapped to
+  five tiers (Mindful, Balanced, Drifting, Heavy Use, Overloaded).
+
+## Pages
+
+- [Home](https://nituls265.github.io/Nudge/): overview, download, FAQ.
+- [About](https://nituls265.github.io/Nudge/about/): who builds Nudge and why.
+- [How to stop doomscrolling](https://nituls265.github.io/Nudge/stop-doomscrolling/): what it is, practical steps, and how Nudge's nudges work.
+- [Why Nudge needs the Accessibility permission](https://nituls265.github.io/Nudge/accessibility-permission/): what it listens for and what it never reads.
+- [How the wellness score works](https://nituls265.github.io/Nudge/wellness-score/): the five drivers and five tiers.
+- [Source code](https://github.com/nituls265/Nudge)
+- [Latest release](https://github.com/nituls265/Nudge/releases/latest)

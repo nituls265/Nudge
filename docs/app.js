@@ -156,7 +156,7 @@
 
       // Bot filled the hidden field: pretend it worked, send nothing.
       if (honeypot && honeypot.value) {
-        setStatus(o.success, "ok");
+        setStatus(o.successFor(o.body(email)), "ok");
         form.reset();
         return;
       }
@@ -167,11 +167,12 @@
       }
 
       busy = true;
-      var body = JSON.stringify(o.body(email)); // read options before disabling the fieldset
+      var sent = o.body(email); // read options before disabling the fieldset
+      var body = JSON.stringify(sent);
       fieldset.disabled = true;
       setStatus("Adding you…");
 
-      fetch(C.SUPABASE_URL.replace(/\/+$/, "") + "/rest/v1/" + o.table, {
+      fetch(C.SUPABASE_URL.replace(/\/+$/, "") + "/rest/v1/" + o.path, {
         method: "POST",
         headers: {
           "apikey": C.SUPABASE_ANON_KEY,
@@ -184,10 +185,11 @@
         referrerPolicy: "no-referrer"
       })
         .then(function (r) {
-          // 201 = added. 409 = already signed up: report the same success so
-          // the response never reveals whether an address was already there.
-          if (r.status === 201 || r.status === 409) {
-            setStatus(o.success, "ok");
+          // Waitlist: 201 = added, 409 = already there. Challenge (RPC): 200/204.
+          // Every success shows the same message, so the response never
+          // reveals whether an address was already on a list.
+          if (r.status === 201 || r.status === 409 || r.status === 200 || r.status === 204) {
+            setStatus(o.successFor(sent), "ok");
             form.reset();
           } else if (r.status === 400) {
             input.setAttribute("aria-invalid", "true");
@@ -208,20 +210,27 @@
 
   wireForm({
     form: "waitlist-form", fieldset: "waitlist-fieldset", input: "wl-email",
-    honeypot: "wl-website", status: "wl-status", table: "waitlist",
+    honeypot: "wl-website", status: "wl-status", path: "waitlist",
     body: function (email) { return { email: email }; },
-    success: "Thanks, you’re on the list. We’ll email you once when Nudge launches on iPhone."
+    successFor: function () { return "Thanks, you’re on the list. We’ll email you once when Nudge launches on iPhone."; }
   });
 
   wireForm({
     form: "challenge-form", fieldset: "challenge-fieldset", input: "ch-email",
-    honeypot: "ch-website", status: "ch-status", table: "subscribers",
+    honeypot: "ch-website", status: "ch-status",
+    // join_challenge() adds new people and, for someone already signed up,
+    // records a newly ticked "updates" box. It returns nothing either way.
+    path: "rpc/join_challenge",
     body: function (email) {
       var updates = $("ch-updates");
-      return { email: email, wants_updates: !!(updates && updates.checked) };
+      return { p_email: email, p_wants_updates: !!(updates && updates.checked) };
     },
-    success: C.GUIDE_EMAIL_ENABLED === true
-      ? "You’re in! Check your inbox for the setup guide. We’ll check in once at day 30."
-      : "You’re in! We’ll check in once at day 30."
+    // Confirm what they're signed up for (not whether they were already).
+    successFor: function (sent) {
+      var guide = C.GUIDE_EMAIL_ENABLED === true ? " Check your inbox for the setup guide." : "";
+      return sent.p_wants_updates
+        ? "You’re in!" + guide + " We’ll check in at day 30 and send you Nudge updates and articles."
+        : "You’re in!" + guide + " We’ll check in once at day 30.";
+    }
   });
 })();

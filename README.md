@@ -241,11 +241,16 @@ checks this against a throwaway Postgres, and the **Site checks** workflow runs 
 After someone taps **Download for Android**, the page shows a setup guide and
 an optional form: email for a one-time day-30 check-in, plus an unticked box
 for "updates and articles". Sign-ups go to the
-`subscribers` table (insert-only from the website, separate from the waitlist
-and from all app data).
+`subscribers` table through the `join_challenge()` database function, the
+website's only way in (no read access; separate from the waitlist and from
+all app data). Signing up again with the box ticked records the tick; an
+unticked repeat never opts anyone out, and an unsubscribed person stays
+unsubscribed. The page confirms what someone is signed up for without
+revealing whether they were already on the list.
 
-**1. Create the table (one-time).** Supabase → **SQL Editor** → **+ New query**
-→ paste `supabase/migrations/20261103120000_subscribers.sql` → **Run**.
+**1. Create the table and sign-up function (one-time).** Supabase → **SQL
+Editor** → **+ New query** → paste `supabase/migrations/20261103120000_subscribers.sql`
+→ **Run**; then the same for `supabase/migrations/20261103130000_subscribers_join_rpc.sql`.
 
 **2. Weekly routine (about 5 minutes).** In the SQL Editor, run the queries in
 `supabase/queries/subscribers.sql`:

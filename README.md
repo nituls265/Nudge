@@ -240,7 +240,7 @@ checks this against a throwaway Postgres, and the **Site checks** workflow runs 
 
 After someone taps **Download for Android**, the page shows a setup guide and
 an optional form: email for a one-time day-30 check-in, plus an unticked box
-for "updates and articles, a few times a year". Sign-ups go to the
+for "updates and articles". Sign-ups go to the
 `subscribers` table (insert-only from the website, separate from the waitlist
 and from all app data).
 
@@ -254,8 +254,9 @@ and from all app data).
    addresses in **BCC**. Replies come back to the same inbox.
 3. Query 2 marks them as sent.
 
-Someone replies STOP → query 3. Someone asks to be deleted → query 4.
-Updates mailing (a few times a year) → query 5.
+Every email ends with an **Unsubscribe** link that opens a pre-filled
+"Unsubscribe" email to nudge.here@gmail.com → run query 3 for that address.
+Someone asks to be deleted → query 4. Before an updates mailing → query 5.
 
 **3. Automatic startup-guide email (one-time, about 15 minutes, free).**
 Supabase pings a Google Apps Script running in the Nudge Gmail account, which

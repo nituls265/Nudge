@@ -146,6 +146,9 @@ figcaption { color: var(--muted); font-size: 0.92rem; margin-top: 12px; }
 .steps li strong, .steps li em { color: var(--text); }
 .ad-challenge { border-top: 1px solid var(--line); padding-top: 24px; }
 .check { display: flex; gap: 10px; align-items: flex-start; font-weight: 400; color: var(--muted); margin: 14px 0 0; cursor: pointer; }
+#challenge-form input[type="email"] { width: 100%; }
+.ch-submit { margin-top: 16px; }
+#ch-promise { margin-top: 10px; }
 .check input { width: 20px; height: 20px; margin: 2px 0 0; flex: none; accent-color: var(--accent); }
 .linklike {
   background: none; border: 0; padding: 6px 0; font: inherit; font-size: 0.92rem;

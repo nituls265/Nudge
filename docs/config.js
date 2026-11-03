@@ -25,5 +25,5 @@ window.NUDGE_CONFIG = Object.freeze({
   CONTACT_EMAIL: "nudge.here@gmail.com",
   // true once the Apps Script mailer is set up (README: "Automatic startup-guide
   // email"). Only changes the wording: the form promises the guide by email.
-  GUIDE_EMAIL_ENABLED: false,
+  GUIDE_EMAIL_ENABLED: true,
 });

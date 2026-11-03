@@ -252,12 +252,12 @@ revealing whether they were already on the list.
 Editor** → **+ New query** → paste `supabase/migrations/20261103120000_subscribers.sql`
 → **Run**; then the same for `supabase/migrations/20261103130000_subscribers_join_rpc.sql`.
 
-**2. Weekly routine (about 5 minutes).** In the SQL Editor, run the queries in
-`supabase/queries/subscribers.sql`:
-1. Query 1 lists who is due for the day-30 check-in.
-2. Send them `email/day30-checkin.txt` from the Nudge Gmail with their
-   addresses in **BCC**. Replies come back to the same inbox.
-3. Query 2 marks them as sent.
+**2. Day-30 check-ins are automatic** once step 4 is done: a daily job
+(15:17 UTC) emails everyone who reached day 30 from the Nudge Gmail and marks
+them as sent. Replies come back to the same inbox. Query 1 in
+`supabase/queries/subscribers.sql` shows who is next in line; query 6 shows
+totals. (`email/day30-checkin.txt` is the same email as a Gmail template, for
+sending by hand if you ever turn the job off.)
 
 Every email ends with an **Unsubscribe** link that opens a pre-filled
 "Unsubscribe" email to nudge.here@gmail.com → run query 3 for that address.
@@ -297,10 +297,23 @@ in Supabase Vault; nothing secret is committed.
     promises the guide by email), run `python3 scripts/build_site.py`, commit.
 
 Changed `Code.gs` later? **Deploy → Manage deployments → ✏️ → Version: New
-version → Deploy** keeps the same URL. The script sends at most 60 guides a
-day (Gmail allows 100), so bulk fake sign-ups can't exhaust the account.
-`supabase/tests/subscribers_permissions.sql` checks the table permissions and
-the trigger (with stand-ins for pg_net and Vault) in CI.
+version → Deploy** keeps the same URL. The script sends at most 60 guides and
+40 check-ins a day (Gmail allows 100), so bulk fake sign-ups can't exhaust
+the account. `supabase/tests/subscribers_permissions.sql` checks the table
+permissions, the guide trigger and the check-in job (with stand-ins for
+pg_net and Vault) in CI.
+
+**4. Automatic day-30 check-ins (one-time, about 5 minutes).** Needs step 3.
+1. Apps Script (signed in as the Nudge Gmail): replace the editor contents
+   with the latest `email/apps-script/Code.gs` → **Save**. Choose
+   `sendCheckinTestToMyself` → **Run** and check the test email.
+2. **Deploy → Manage deployments → ✏️ → Version: New version → Deploy**
+   (same URL, so nothing changes in Supabase).
+3. Supabase → SQL Editor → **+ New query** → paste
+   `supabase/migrations/20261103140000_subscribers_checkin_cron.sql` → **Run**.
+4. Check the job exists: `select jobname, schedule from cron.job;` shows
+   `nudge-day30-checkins | 17 15 * * *`. To pause it:
+   `select cron.unschedule('nudge-day30-checkins');`
 
 ### Stats workflow
 

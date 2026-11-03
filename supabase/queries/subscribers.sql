@@ -2,8 +2,9 @@
 -- Supabase SQL Editor (select the lines, then Run). Never put these in client
 -- code: the website can only insert, by design.
 
--- 1. WEEKLY: who is due for the day-30 check-in?
---    Copy the emails into Gmail's BCC field and send email/day30-checkin.txt.
+-- 1. Who is due for the day-30 check-in? The daily job (15:17 UTC) emails
+--    these automatically. Only if the job is off: send email/day30-checkin.txt
+--    by hand with these in BCC, then run query 2.
 select email, created_at
   from public.subscribers
  where checkin_sent_at is null
@@ -11,8 +12,8 @@ select email, created_at
    and created_at <= now() - interval '30 days'
  order by created_at;
 
--- 2. Right after sending: mark those same people as done, so they don't
---    show up again next week. (Same filter as query 1.)
+-- 2. Only after sending check-ins BY HAND: mark those same people as done.
+--    (Same filter as query 1. The automatic job marks people itself.)
 update public.subscribers
    set checkin_sent_at = now()
  where checkin_sent_at is null

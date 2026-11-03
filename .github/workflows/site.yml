@@ -73,5 +73,5 @@ jobs:
           createdb nudge_subs_test
           psql -d nudge_subs_test -X -q -f supabase/tests/subscribers_permissions.sql 2>&1 | tee subs.txt
           errors=$(grep -c 'ERROR:' subs.txt)
-          [ "$errors" -eq 9 ] || { echo "::error::expected 9 denied statements, got $errors"; exit 1; }
+          [ "$errors" -eq 10 ] || { echo "::error::expected 10 denied statements, got $errors"; exit 1; }
           grep -q 'RESULT: PASS' subs.txt || { echo "::error::subscribers checks failed"; exit 1; }

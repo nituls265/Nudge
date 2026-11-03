@@ -1,4 +1,6 @@
 === HOW TO USE (don't paste this box) ==========================================
+This email is now sent automatically by the Apps Script mailer at day 30.
+Keep this copy for sending by hand only if the daily job is switched off.
 Gmail: save everything below the line as a template (Settings > Advanced >
 Templates: Enable; then compose, paste, and ⋮ > Templates > Save draft as template).
 Before saving, turn the last line into a link: select the word "Unsubscribe",

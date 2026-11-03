@@ -23,4 +23,7 @@ window.NUDGE_CONFIG = Object.freeze({
   SUPABASE_URL: "https://mvfdwgcknmskadhlujgk.supabase.co",
   SUPABASE_ANON_KEY: "sb_publishable_evEXLt2hGLkCHbIY7yweaA_SSu2XwWX",
   CONTACT_EMAIL: "nituls265@gmail.com",
+  // true once the Apps Script mailer is set up (README: "Automatic startup-guide
+  // email"). Only changes the wording: the form promises the guide by email.
+  GUIDE_EMAIL_ENABLED: false,
 });

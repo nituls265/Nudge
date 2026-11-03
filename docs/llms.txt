@@ -30,6 +30,7 @@ Key facts:
 
 - [Home](https://nituls265.github.io/Nudge/): overview, download, FAQ.
 - [About](https://nituls265.github.io/Nudge/about/): who builds Nudge and why.
+- [How to stop doomscrolling](https://nituls265.github.io/Nudge/stop-doomscrolling/): what it is, practical steps, and how Nudge's nudges work.
 - [Why Nudge needs the Accessibility permission](https://nituls265.github.io/Nudge/accessibility-permission/): what it listens for and what it never reads.
 - [How the wellness score works](https://nituls265.github.io/Nudge/wellness-score/): the five drivers and five tiers.
 - [Source code](https://github.com/nituls265/Nudge)

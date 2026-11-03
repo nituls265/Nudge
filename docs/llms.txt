@@ -1,4 +1,4 @@
-> Nudge — a free, open-source Android app for doomscrolling prevention and digital wellbeing.
+> Nudge — a free, open-source Android app to stop doomscrolling (doomscrolling prevention and digital wellbeing).
 > This file's effect on AI-assistant citation or discovery is unproven; it is
 > included as a no-cost experiment, not a known-effective technique.
 

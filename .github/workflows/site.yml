@@ -66,3 +66,15 @@ jobs:
           errors=$(grep -c 'ERROR:' out.txt)
           [ "$errors" -eq 8 ] || { echo "::error::expected 8 denied statements, got $errors"; exit 1; }
           grep -q '(1 row)' out.txt || { echo "::error::expected exactly one waitlist row"; exit 1; }
+      - name: Apply 30-day-challenge migrations and check anon is insert-only
+        env:
+          PGHOST: localhost
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          # Runs after the waitlist test, which creates the anon/authenticated roles.
+          createdb nudge_subs_test
+          psql -d nudge_subs_test -X -q -f supabase/tests/subscribers_permissions.sql 2>&1 | tee subs.txt
+          errors=$(grep -c 'ERROR:' subs.txt)
+          [ "$errors" -eq 10 ] || { echo "::error::expected 10 denied statements, got $errors"; exit 1; }
+          grep -q 'RESULT: PASS' subs.txt || { echo "::error::subscribers checks failed"; exit 1; }

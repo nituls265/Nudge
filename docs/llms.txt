@@ -7,7 +7,7 @@
 Nudge is a free, open-source Android app with a live scroll counter and a
 daily wellness score (0-100). A floating bubble shows the running scroll
 count over any app, and gentle nudges (notification, then full-screen
-prompt) appear if you go past your own limits. No account, no ads.
+prompt) appear when you scroll fast. No account, no ads.
 
 Key facts:
 - Platform: Android 7.0+ (minSdk 24). No iOS app yet; an iPhone waitlist is

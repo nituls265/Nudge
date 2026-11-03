@@ -17,6 +17,9 @@
 var MAX_PER_DAY = 60; // well under Gmail's 100/day limit for consumer accounts
 var EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 var SITE_URL = 'https://nituls265.github.io/Nudge/';
+// Opens a pre-filled "Unsubscribe" email to this inbox; handle it with query 3
+// in supabase/queries/subscribers.sql.
+var UNSUBSCRIBE_URL = 'mailto:nudge.here@gmail.com?subject=Unsubscribe';
 
 var SUBJECT = 'Your Nudge setup guide (and day 1 of your 30-day challenge)';
 
@@ -38,12 +41,14 @@ var TEXT = [
   SITE_URL,
   '',
   '--',
-  'You are getting this because this address was entered at ' + SITE_URL + '. If that was not you, just ignore this email. To stop all Nudge emails, reply STOP.'
+  'You are getting this because this address was entered at ' + SITE_URL + '. If that was not you, just ignore this email.',
+  'Unsubscribe: ' + UNSUBSCRIBE_URL
 ].join('\n');
 
 var HTML = TEXT
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-  .split('\n\n').map(function (p) { return '<p>' + p.replace(/\n/g, '<br>') + '</p>'; }).join('');
+  .split('\n\n').map(function (p) { return '<p>' + p.replace(/\n/g, '<br>') + '</p>'; }).join('')
+  .replace('Unsubscribe: ' + UNSUBSCRIBE_URL, '<a href="' + UNSUBSCRIBE_URL + '">Unsubscribe</a>');
 
 function doPost(e) {
   var props = PropertiesService.getScriptProperties();

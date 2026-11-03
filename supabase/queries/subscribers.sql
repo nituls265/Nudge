@@ -19,7 +19,7 @@ update public.subscribers
    and unsubscribed_at is null
    and created_at <= now() - interval '30 days';
 
--- 3. Someone replied STOP: no more emails of any kind.
+-- 3. Someone clicked Unsubscribe (or asked by email): no more emails of any kind.
 --    Replace the address, then run.
 update public.subscribers
    set unsubscribed_at = now(), wants_updates = false
@@ -29,7 +29,7 @@ update public.subscribers
 delete from public.subscribers
  where lower(email) = lower('person@example.com');
 
--- 5. A few times a year: who wants updates and articles?
+-- 5. Before an updates mailing: who wants updates and articles?
 select email
   from public.subscribers
  where wants_updates

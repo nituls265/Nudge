@@ -240,12 +240,17 @@ checks this against a throwaway Postgres, and the **Site checks** workflow runs 
 
 After someone taps **Download for Android**, the page shows a setup guide and
 an optional form: email for a one-time day-30 check-in, plus an unticked box
-for "updates and articles, a few times a year". Sign-ups go to the
-`subscribers` table (insert-only from the website, separate from the waitlist
-and from all app data).
+for "updates and articles". Sign-ups go to the
+`subscribers` table through the `join_challenge()` database function, the
+website's only way in (no read access; separate from the waitlist and from
+all app data). Signing up again with the box ticked records the tick; an
+unticked repeat never opts anyone out, and an unsubscribed person stays
+unsubscribed. The page confirms what someone is signed up for without
+revealing whether they were already on the list.
 
-**1. Create the table (one-time).** Supabase → **SQL Editor** → **+ New query**
-→ paste `supabase/migrations/20261103120000_subscribers.sql` → **Run**.
+**1. Create the table and sign-up function (one-time).** Supabase → **SQL
+Editor** → **+ New query** → paste `supabase/migrations/20261103120000_subscribers.sql`
+→ **Run**; then the same for `supabase/migrations/20261103130000_subscribers_join_rpc.sql`.
 
 **2. Weekly routine (about 5 minutes).** In the SQL Editor, run the queries in
 `supabase/queries/subscribers.sql`:
@@ -254,8 +259,9 @@ and from all app data).
    addresses in **BCC**. Replies come back to the same inbox.
 3. Query 2 marks them as sent.
 
-Someone replies STOP → query 3. Someone asks to be deleted → query 4.
-Updates mailing (a few times a year) → query 5.
+Every email ends with an **Unsubscribe** link that opens a pre-filled
+"Unsubscribe" email to nudge.here@gmail.com → run query 3 for that address.
+Someone asks to be deleted → query 4. Before an updates mailing → query 5.
 
 **3. Automatic startup-guide email (one-time, about 15 minutes, free).**
 Supabase pings a Google Apps Script running in the Nudge Gmail account, which

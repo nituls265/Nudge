@@ -198,7 +198,7 @@
           <p class="status" id="wl-status" role="status" aria-live="polite"></p>
           <noscript>
             <p class="fine">The waitlist form needs JavaScript. You can also email
-              <a data-href-tpl="mailto:{CONTACT_EMAIL}?subject=iPhone%20waitlist" href="mailto:nituls265@gmail.com?subject=iPhone%20waitlist" data-text-tpl="{CONTACT_EMAIL}">nituls265@gmail.com</a>
+              <a data-href-tpl="mailto:{CONTACT_EMAIL}?subject=iPhone%20waitlist" href="mailto:nudge.here@gmail.com?subject=iPhone%20waitlist" data-text-tpl="{CONTACT_EMAIL}">nudge.here@gmail.com</a>
               with the subject “iPhone waitlist”.</p>
           </noscript>
         </div>
@@ -226,22 +226,20 @@
             <fieldset id="challenge-fieldset" disabled>
               <legend class="sr-only">30-day challenge</legend>
               <label for="ch-email">Email address</label>
-              <div class="field-row">
-                <input id="ch-email" name="email" type="email" inputmode="email" autocomplete="email"
-                       maxlength="254" required aria-describedby="ch-intro ch-promise ch-status">
-                <button class="btn btn-primary" type="submit">Join the challenge</button>
-              </div>
+              <input id="ch-email" name="email" type="email" inputmode="email" autocomplete="email"
+                     maxlength="254" required aria-describedby="ch-intro ch-promise ch-status">
               <label class="check">
                 <input id="ch-updates" name="wants_updates" type="checkbox">
-                <span>Also send me Nudge updates and articles on mindful phone use, a few times a year.</span>
+                <span>Also send me Nudge updates and articles on mindful phone use.</span>
               </label>
+              <button class="btn btn-primary ch-submit" type="submit">Join the challenge</button>
               <div class="hp" aria-hidden="true">
                 <label for="ch-website">Leave this empty</label>
                 <input id="ch-website" name="website" type="text" tabindex="-1" autocomplete="off">
               </div>
             </fieldset>
           </form>
-          <p class="fine" id="ch-promise">Optional. Never shared, never sold. Reply STOP to any email to unsubscribe.</p>
+          <p class="fine" id="ch-promise">Never shared, never sold.</p>
           <p class="status" id="ch-status" role="status" aria-live="polite"></p>
         </div>
       </div>
@@ -254,7 +252,7 @@
       <p><a data-href-tpl="https://github.com/{GITHUB_REPO}" href="https://github.com/nituls265/Nudge">Source on GitHub</a> ·
          <a data-href-tpl="https://github.com/{GITHUB_REPO}/blob/main/LICENSE" href="https://github.com/nituls265/Nudge/blob/main/LICENSE">Apache License 2.0</a></p>
       <p>Privacy: this site has no cookies and no analytics, and it loads nothing from other sites. The only outside requests are the ones you choose to make: joining the iPhone waitlist or the 30-day challenge sends your email to our Supabase database, and we use it only for what you signed up for.</p>
-      <p>Questions or feedback: <a data-href-tpl="mailto:{CONTACT_EMAIL}" href="mailto:nituls265@gmail.com" data-text-tpl="{CONTACT_EMAIL}">nituls265@gmail.com</a></p>
+      <p>Questions or feedback: <a data-href-tpl="mailto:{CONTACT_EMAIL}" href="mailto:nudge.here@gmail.com" data-text-tpl="{CONTACT_EMAIL}">nudge.here@gmail.com</a></p>
     </div>
   </footer>
 </body>

@@ -28,6 +28,6 @@ window.NUDGE_CONFIG = Object.freeze({
   GUIDE_EMAIL_ENABLED: true,
   // Search-console ownership tokens. Leave blank until you have one — the
   // build script only emits the <meta> tag when the value is non-empty.
-  GSC_VERIFICATION: "",   // Google Search Console HTML-tag token
+  GSC_VERIFICATION: "SIWR__jD_O1DpjRyXzKeC8BOsf7HbWXKmmQnk3GkL1Q",   // Google Search Console HTML-tag token
   BING_VERIFICATION: "",  // Bing Webmaster Tools HTML-tag token
 });

@@ -84,3 +84,27 @@ from public.events
 where event_type = 'day_active'
 group by event_date
 order by event_date;
+
+
+-- ----------------------------------------------------------------------------
+-- 4) UNIQUE INSTALLS — distinct install IDs with a first_open event
+--    Counts opted-in telemetry installs only (the GitHub/F-Droid builds ship
+--    without analytics), so this is a lower bound on real installs.
+--    A reinstall or clear-data mints a NEW install_id, so it counts again.
+-- ----------------------------------------------------------------------------
+select
+    count(distinct install_id) as unique_installs,
+    min(timestamp_utc)         as first_install_at,
+    max(timestamp_utc)         as latest_install_at
+from public.events
+where event_type = 'first_open';
+
+-- Optional: split by platform and app version
+select
+    platform,
+    app_version,
+    count(distinct install_id) as unique_installs
+from public.events
+where event_type = 'first_open'
+group by platform, app_version
+order by unique_installs desc;

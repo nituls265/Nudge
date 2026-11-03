@@ -93,15 +93,20 @@ def render_html(src: str, cfg: dict) -> str:
         out, flags=re.S,
     )
 
-    # Search-console verification <meta> tags: emit only when the config value
-    # is non-empty (an empty verification token is worse than no tag at all).
-    def strip_if_empty(m: re.Match) -> str:
-        tag = m.group(0)
-        key = re.search(r'data-verify-tpl="([A-Z_]+)"', tag)
-        if key and not cfg.get(key.group(1)):
-            return ""
-        return tag
-    out = re.sub(r'[ \t]*<meta\b[^>]*data-verify-tpl="[A-Z_]+"[^>]*>\n?', strip_if_empty, out)
+    # Search-console verification <meta> tags. Empty token: the page keeps a
+    # <!-- verify:KEY --> marker (no tag emitted). Non-empty: the marker, or a
+    # previously generated tag, is rewritten as the real <meta>. The marker is
+    # what lets a token added later still find its place in index.html.
+    verify_names = {"GSC_VERIFICATION": "google-site-verification", "BING_VERIFICATION": "msvalidate.01"}
+
+    def verify_tag(m: re.Match) -> str:
+        key = m.group(1) or m.group(2)
+        value = cfg.get(key, "")
+        if not value:
+            return f"<!-- verify:{key} -->"
+        return (f'<meta name="{verify_names[key]}" content="{html.escape(value, quote=True)}" '
+                f'data-verify-tpl="{key}">')
+    out = re.sub(r'<!-- verify:([A-Z_]+) -->|<meta\b[^>]*data-verify-tpl="([A-Z_]+)"[^>]*>', verify_tag, out)
     return out
 
 

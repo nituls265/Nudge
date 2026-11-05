@@ -17,6 +17,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # build_sitemap.py dates each page from `git log`; a shallow clone
+          # would date every page to the checkout commit and fail --check.
+          fetch-depth: 0
 
       - name: Generated files match docs/config.js
         run: |

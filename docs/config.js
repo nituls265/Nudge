@@ -18,7 +18,7 @@ window.NUDGE_CONFIG = Object.freeze({
   // (no version number), or this "latest" link breaks. release.yml does this.
   DOWNLOAD_URL: "https://github.com/nituls265/Nudge/releases/latest/download/app-foss-release.apk",
   APK_ASSET_NAME: "app-foss-release.apk",
-  FDROID_URL: "",            // F-Droid button stays hidden until this is set
+  FDROID_URL: "https://f-droid.org/packages/com.nitulshah.nudge/", // empty = F-Droid button hidden
   SHOW_COUNTERS: false,      // true = show "Downloads on GitHub: N" from stats.json
   SUPABASE_URL: "https://mvfdwgcknmskadhlujgk.supabase.co",
   SUPABASE_ANON_KEY: "sb_publishable_evEXLt2hGLkCHbIY7yweaA_SSu2XwWX",

@@ -1,0 +1,1 @@
+No changes to how the app works. This release updates the F-Droid listing: a clearer summary and description, so it is easier to see what Nudge does before you install it.

@@ -1,24 +1,26 @@
-# After every GitHub release, opens a merge request against fdroid/fdroiddata
-# (via the nituls265/fdroiddata fork) adding a Build entry for the new
-# version, so the F-Droid recipe doesn't need updating by hand each release.
+# Manual only: opens a merge request against fdroid/fdroiddata (via the
+# nituls265/fdroiddata fork) adding a Build entry for the given tag.
+#
+# Do NOT run this for ordinary releases. The fdroiddata recipe uses
+# AutoUpdateMode: Version + UpdateCheckMode: Tags, so F-Droid's own bot adds
+# the Build entry for every new tag. A manual MR for a plain version bump
+# duplicates that change and gets closed by maintainers (see
+# fdroid/fdroiddata!55795). Use this only when the recipe itself must change.
 #
 # Requires a repo secret FDROID_GITLAB_TOKEN: a GitLab personal access token
 # (scope: api) on the account that owns the fdroiddata fork.
 name: F-Droid metadata MR
 
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to open the MR for (e.g. v1.13). Only needed to manually re-run for a release that predates this workflow."
+        description: "Release tag to open the MR for (e.g. v1.14). Only for recipe changes that F-Droid's auto-update cannot make."
         required: true
 
 jobs:
   open-mr:
     runs-on: ubuntu-latest
-    if: ${{ !github.event.release.prerelease }}
     steps:
       # Checked out at the default branch (NOT the release tag): this is
       # what provides scripts/open_fdroid_mr.py. The release's own commit
@@ -32,7 +34,7 @@ jobs:
       - name: Read version info
         id: info
         env:
-          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+          TAG: ${{ inputs.tag }}
         run: |
           git fetch origin "refs/tags/$TAG:refs/tags/$TAG" --depth 1
           COMMIT=$(git rev-parse "refs/tags/$TAG^{commit}")

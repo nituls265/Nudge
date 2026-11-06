@@ -1,4 +1,4 @@
-Nudge is a free, open-source app that gives you a daily wellness score for your phone use, a live scroll counter, and gentle nudges when you go past your own limits.
+Nudge is a free, open-source Android app to help you stop doomscrolling and build healthier phone habits. It gives you a live scroll counter, a daily wellness score for your phone use, and gentle nudges when you scroll fast. It is a self-awareness tool, not a medical treatment.
 
 WHAT NUDGE DOES
 
@@ -6,7 +6,7 @@ A draggable bubble floats over every app and counts your scrolls live, so you ca
 
 Each day gets a single Wellness Score from 0 to 100, built from your scroll volume, session length, how often you unlock your phone, your bedtime habits, and the apps you use, so a heavy day tells you why, not just that it was heavy.
 
-Go past your own limits and the bubble glows amber. Keep going and you get a notification, then a full-screen prompt to take a short break. Ignoring it is always an option.
+Scroll fast while doomscrolling and the bubble glows amber. Keep going and you get a notification, then a full-screen prompt to take a short break. Ignoring it is always an option.
 
 A history dashboard shows your score, scrolls, unlocks and screen time over the last 7, 30 and 90 days, along with your peak activity hour and a per-app breakdown of where your scrolling actually goes.
 

@@ -125,8 +125,7 @@ fun SettingsSheet(vm: ScrollViewModel, onDismiss: () -> Unit) {
                                 "can see if Nudge helps. No personal data. Turning this off " +
                                 "deletes the ID.",
                             style      = MaterialTheme.typography.bodySmall,
-                            color      = Slate500,
-                            lineHeight = 16.sp
+                            color      = Slate500
                         )
                     }
                     Spacer(Modifier.width(12.dp))

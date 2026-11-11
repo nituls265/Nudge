@@ -359,7 +359,6 @@ private fun SectionLabel(text: String) {
         text,
         style         = MaterialTheme.typography.labelSmall,
         color         = Slate400,
-        fontSize      = 10.sp,
         fontWeight    = FontWeight.Bold,
         letterSpacing = 0.8.sp
     )

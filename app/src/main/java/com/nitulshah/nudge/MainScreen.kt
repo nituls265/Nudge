@@ -224,8 +224,7 @@ private fun NavTabItem(
                 label,
                 style      = MaterialTheme.typography.labelSmall,
                 color      = color,
-                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                fontSize   = 10.sp
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
             )
         }
     }
@@ -288,7 +287,6 @@ internal fun InsightCard(modifier: Modifier, label: String, value: String, color
                 label.uppercase(),
                 style         = MaterialTheme.typography.labelSmall,
                 color         = Slate500,
-                fontSize      = 12.sp,
                 fontWeight    = FontWeight.Bold,
                 letterSpacing = 0.6.sp
             )
@@ -538,7 +536,7 @@ internal fun BarChart(
                 Text(
                     "✕",
                     color    = Slate500,
-                    fontSize = 14.sp,
+                    fontSize = 16.sp,
                     modifier = Modifier
                         .padding(bottom = 2.dp)
                         .clickable(
@@ -554,7 +552,6 @@ internal fun BarChart(
                 "Tap a bar to explore",
                 style    = MaterialTheme.typography.labelSmall,
                 color    = Slate500,
-                fontSize = 10.sp,
                 modifier = Modifier.padding(top = 4.dp)
             )
         }
@@ -667,7 +664,7 @@ internal fun BarColumn(
             .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { onClick() }
     ) {
         if (timeRange == 7 && day.count > 0) {
-            Text(valueFormatter(day.count), fontSize = 9.sp, fontWeight = FontWeight.SemiBold,
+            Text(valueFormatter(day.count), style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false, fontWeight = FontWeight.SemiBold,
                 color = if (isToday) MaterialTheme.colorScheme.onBackground else Slate400)
             Spacer(Modifier.height(4.dp))
         }
@@ -679,7 +676,7 @@ internal fun BarColumn(
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            dayLabel, fontSize = 9.sp, fontWeight = FontWeight.Medium,
+            dayLabel, style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false, fontWeight = FontWeight.Medium,
             color = when {
                 isSelected -> accentColor.copy(alpha = 0.8f)
                 isToday    -> Slate400
@@ -708,14 +705,13 @@ internal fun AppBreakdownSection(entries: List<Pair<String, Int>>) {
         verticalAlignment     = Alignment.CenterVertically
     ) {
         Text("SCROLL SOURCES", style = MaterialTheme.typography.labelSmall,
-            color = Slate400, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
+            color = Slate400, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
         if (entries.size > 3) {
             Text(
                 if (expanded) "Show less ▲" else "+$hidden more ▼",
                 style      = MaterialTheme.typography.labelSmall,
                 color      = MetricScrolls,
                 fontWeight = FontWeight.Bold,
-                fontSize   = 12.sp,
                 modifier   = Modifier.clickable { expanded = !expanded }
             )
         }
@@ -744,10 +740,10 @@ internal fun AppBreakdownSection(entries: List<Pair<String, Int>>) {
                         color      = MaterialTheme.colorScheme.onBackground,
                         modifier   = Modifier.weight(1f))
                     Text("$count", style = MaterialTheme.typography.labelSmall,
-                        color = Slate500, fontSize = 12.sp)
+                        color = Slate500)
                     Spacer(Modifier.width(6.dp))
                     Text("$pct%", style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold, color = MetricScrolls, fontSize = 13.sp)
+                        fontWeight = FontWeight.Bold, color = MetricScrolls)
                 }
                 Spacer(Modifier.height(5.dp))
                 Box(
@@ -798,8 +794,8 @@ internal fun ScoreComponent(
             verticalAlignment     = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Text(label, style = MaterialTheme.typography.bodySmall, color = Slate400,
-                fontSize = 13.sp, modifier = Modifier.width(140.dp))
+            Text(label, style = MaterialTheme.typography.bodyMedium, color = Slate400,
+                modifier = Modifier.width(150.dp))
             Box(
                 modifier = Modifier.weight(1f).height(5.dp)
                     .background(Slate900, RoundedCornerShape(3.dp))
@@ -813,18 +809,17 @@ internal fun ScoreComponent(
             }
             Text(
                 "$points/$maxPts",
-                style      = MaterialTheme.typography.labelSmall,
+                style      = MaterialTheme.typography.labelMedium,
                 color      = if (isFull) barColor else Slate500,
-                fontSize   = 12.sp,
                 fontWeight = if (isFull) FontWeight.Bold else FontWeight.Normal,
-                modifier   = Modifier.width(38.dp),
+                modifier   = Modifier.width(46.dp),
                 textAlign  = TextAlign.End
             )
         }
         if (subLabel != null) {
             Text(subLabel, style = MaterialTheme.typography.labelSmall,
-                color = Slate500, fontSize = 11.sp,
-                modifier = Modifier.padding(start = 150.dp, top = 2.dp))
+                color = Slate500,
+                modifier = Modifier.padding(start = 160.dp, top = 2.dp))
         }
     }
 }
@@ -888,12 +883,11 @@ internal fun SubScoreTrendChart(
                 if (headerLabel != null) headerLabel.uppercase() else "TREND",
                 style         = MaterialTheme.typography.labelSmall,
                 color         = Slate400,
-                fontSize      = 10.sp,
                 fontWeight    = FontWeight.Bold,
                 letterSpacing = 0.8.sp
             )
             if (selectedIndex != null) {
-                Text("✕", color = Slate500, fontSize = 11.sp,
+                Text("✕", color = Slate500, fontSize = 16.sp,
                     modifier = Modifier.clickable(
                         indication = null, interactionSource = remember { MutableInteractionSource() }
                     ) { onSelect(null) })
@@ -945,7 +939,7 @@ internal fun SubScoreTrendChart(
                     if (selectedRange == 7) {
                         Box(modifier = Modifier.height(16.dp), contentAlignment = Alignment.BottomCenter) {
                             if (hasData) Text(
-                                value.toString(), fontSize = 9.sp,
+                                value.toString(), style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false,
                                 color = (if (isSelected || (isToday && !hasSelection))
                                     Color(tier!!.colorHex) else Slate500).copy(alpha = alpha),
                                 fontWeight = if (isSelected || isToday) FontWeight.Bold else FontWeight.Normal
@@ -967,7 +961,7 @@ internal fun SubScoreTrendChart(
                     }
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        dayLabel, fontSize = 8.sp,
+                        dayLabel, style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false,
                         color = when {
                             isSelected -> barColor
                             isToday    -> Slate400
@@ -991,7 +985,7 @@ internal fun SubScoreTrendChart(
                         horizontalArrangement = Arrangement.spacedBy(3.dp)
                     ) {
                         Box(modifier = Modifier.size(7.dp).background(Color(t.colorHex), CircleShape))
-                        Text(t.label, fontSize = 9.sp, color = Slate500)
+                        Text(t.label, style = MaterialTheme.typography.labelSmall, color = Slate500)
                     }
                 }
             }
@@ -1054,12 +1048,12 @@ internal fun TierScaleBar(currentScore: Int, averageScore: Int? = null) {
         }
         Spacer(Modifier.height(3.dp))
         Row(modifier = Modifier.fillMaxWidth()) {
-            Text("0",   Modifier.weight(30f), fontSize = 10.sp, color = Slate500)
-            Text("30",  Modifier.weight(20f), fontSize = 10.sp, color = Slate500)
-            Text("50",  Modifier.weight(20f), fontSize = 10.sp, color = Slate500)
-            Text("70",  Modifier.weight(15f), fontSize = 10.sp, color = Slate500)
-            Text("85",  Modifier.weight(14f), fontSize = 10.sp, color = Slate500)
-            Text("100",                       fontSize = 10.sp, color = Slate500)
+            Text("0",   Modifier.weight(30f), style = MaterialTheme.typography.labelSmall, color = Slate500)
+            Text("30",  Modifier.weight(20f), style = MaterialTheme.typography.labelSmall, color = Slate500)
+            Text("50",  Modifier.weight(20f), style = MaterialTheme.typography.labelSmall, color = Slate500)
+            Text("70",  Modifier.weight(15f), style = MaterialTheme.typography.labelSmall, color = Slate500)
+            Text("85",  Modifier.weight(14f), style = MaterialTheme.typography.labelSmall, color = Slate500)
+            Text("100",                       style = MaterialTheme.typography.labelSmall, color = Slate500)
         }
         Spacer(Modifier.height(4.dp))
         Row(modifier = Modifier.fillMaxWidth()) {
@@ -1074,12 +1068,12 @@ internal fun TierScaleBar(currentScore: Int, averageScore: Int? = null) {
                         imageVector        = tierImageVector(tier),
                         contentDescription = null,
                         tint               = tierColor,
-                        modifier           = Modifier.size(8.dp)
+                        modifier           = Modifier.size(10.dp)
                     )
                     Spacer(Modifier.width(2.dp))
                     Text(
                         tier.label,
-                        fontSize   = 9.sp,
+                        style      = MaterialTheme.typography.labelSmall,
                         color      = tierColor,
                         fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
                         maxLines   = 1

@@ -1,0 +1,1 @@
+Text is bigger and easier to read across the app. Score drivers, the "points to next tier" nudge, metric labels and chart labels are larger, and nothing is smaller than 12sp. Text still follows your phone's font-size setting.

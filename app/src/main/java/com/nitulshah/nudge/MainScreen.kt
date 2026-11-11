@@ -1064,13 +1064,8 @@ internal fun TierScaleBar(currentScore: Int, averageScore: Int? = null) {
                     modifier          = Modifier.weight(w),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector        = tierImageVector(tier),
-                        contentDescription = null,
-                        tint               = tierColor,
-                        modifier           = Modifier.size(10.dp)
-                    )
-                    Spacer(Modifier.width(2.dp))
+                    // No per-tier icons here: at the 12sp floor the narrow
+                    // Balanced/Mindful segments need the full width for text.
                     Text(
                         tier.label,
                         style      = MaterialTheme.typography.labelSmall,

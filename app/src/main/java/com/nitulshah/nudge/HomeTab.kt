@@ -165,8 +165,7 @@ private fun TrackingSetupCard(context: Context, overlayAllowed: Boolean) {
                 "Nudge counts scrolls and unlocks with an Android accessibility service. " +
                     "Nothing is tracked, and there's no score, until it's on.",
                 style      = MaterialTheme.typography.bodySmall,
-                color      = Slate400,
-                lineHeight = 18.sp
+                color      = Slate400
             )
             Button(
                 onClick  = {
@@ -182,9 +181,8 @@ private fun TrackingSetupCard(context: Context, overlayAllowed: Boolean) {
             }
             Text(
                 "Find Nudge under Downloaded apps (or Installed apps) and switch it on.",
-                style      = MaterialTheme.typography.labelSmall,
-                color      = Slate500,
-                lineHeight = 16.sp
+                style      = MaterialTheme.typography.bodySmall,
+                color      = Slate500
             )
 
             // Android 13+ blocks accessibility for apps installed outside an app
@@ -194,9 +192,8 @@ private fun TrackingSetupCard(context: Context, overlayAllowed: Boolean) {
                 Text(
                     "Is Nudge greyed out or showing \"Restricted setting\"? Open App info, " +
                         "tap the ⋮ menu, choose Allow restricted settings, then try again.",
-                    style      = MaterialTheme.typography.labelSmall,
-                    color      = Slate400,
-                    lineHeight = 16.sp
+                    style      = MaterialTheme.typography.bodySmall,
+                    color      = Slate400
                 )
                 OutlinedButton(
                     onClick  = {
@@ -219,9 +216,8 @@ private fun TrackingSetupCard(context: Context, overlayAllowed: Boolean) {
                 HorizontalDivider(color = Slate700)
                 Text(
                     "Optional: allow Display over other apps to show the floating scroll-count bubble.",
-                    style      = MaterialTheme.typography.labelSmall,
-                    color      = Slate400,
-                    lineHeight = 16.sp
+                    style      = MaterialTheme.typography.bodySmall,
+                    color      = Slate400
                 )
                 OutlinedButton(
                     onClick  = {
@@ -333,11 +329,11 @@ private fun ScoreRingHero(
                         imageVector        = Icons.Outlined.TrendingUp,
                         contentDescription = null,
                         tint               = Slate400,
-                        modifier           = Modifier.size(11.dp)
+                        modifier           = Modifier.size(14.dp)
                     )
                     Text(
                         trendLabel,
-                        style      = MaterialTheme.typography.labelSmall,
+                        style      = MaterialTheme.typography.labelMedium,
                         color      = Slate400,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -353,7 +349,7 @@ private fun ScoreRingHero(
         val nudge = nextTierNudge(score.total)
         Text(
             nudge.text,
-            style      = MaterialTheme.typography.labelMedium,
+            style      = MaterialTheme.typography.titleSmall,
             color      = nudge.nudgeColor,
             fontWeight = FontWeight.Bold,
             textAlign  = TextAlign.Center
@@ -367,7 +363,7 @@ private fun ScoreRingHero(
             val signed   = if (aboveAvg) "+$overallDelta" else "$overallDelta"
             Text(
                 "$signed ${if (aboveAvg) "above" else "below"} your 30-day avg ($overallAverage)",
-                style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.labelMedium,
                 color = Slate500
             )
         }
@@ -436,9 +432,8 @@ private fun MetricPill(label: String, value: String, color: Color) {
             Box(modifier = Modifier.size(6.dp).background(color, androidx.compose.foundation.shape.CircleShape))
             Text(
                 label,
-                style    = MaterialTheme.typography.labelSmall,
+                style    = MaterialTheme.typography.labelMedium,
                 color    = Slate400,
-                fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold
             )
         }
@@ -452,9 +447,8 @@ private fun SubMetricBarsSection(score: WellnessScore) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
             "SCORE DRIVERS",
-            style         = MaterialTheme.typography.labelSmall,
+            style         = MaterialTheme.typography.labelMedium,
             color         = Slate400,
-            fontSize      = 12.sp,
             fontWeight    = FontWeight.Bold,
             letterSpacing = 0.8.sp
         )
@@ -501,13 +495,12 @@ private fun FlaggedAppCallout(apps: List<String>) {
             imageVector        = Icons.Outlined.Warning,
             contentDescription = null,
             tint               = Orange,
-            modifier           = Modifier.size(14.dp)
+            modifier           = Modifier.size(16.dp)
         )
         Text(
             "App quality reduced by",
-            style    = MaterialTheme.typography.labelSmall,
+            style    = MaterialTheme.typography.labelMedium,
             color    = Slate400,
-            fontSize = 12.sp,
             modifier = Modifier.weight(1f)
         )
         Row(
@@ -517,10 +510,9 @@ private fun FlaggedAppCallout(apps: List<String>) {
             apps.forEach { app ->
                 Text(
                     app,
-                    style      = MaterialTheme.typography.labelSmall,
+                    style      = MaterialTheme.typography.labelMedium,
                     color      = orange,
                     fontWeight = FontWeight.SemiBold,
-                    fontSize   = 12.sp,
                     modifier   = Modifier
                         .background(orange.copy(alpha = 0.12f), RoundedCornerShape(4.dp))
                         .padding(horizontal = 7.dp, vertical = 3.dp)

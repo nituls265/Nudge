@@ -46,7 +46,7 @@ fun TelemetryConsentDialog(
             Spacer(Modifier.height(10.dp))
             Text(
                 "Help improve Nudge?",
-                fontSize = 20.sp,
+                fontSize = 22.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = androidx.compose.ui.graphics.Color.White
             )
@@ -54,9 +54,9 @@ fun TelemetryConsentDialog(
             Text(
                 "We'd like to know if Nudge actually helps people over time. If you " +
                     "opt in, the app sends:",
-                fontSize = 14.sp,
+                fontSize = 16.sp,
                 color = Slate400,
-                lineHeight = 20.sp
+                lineHeight = 24.sp
             )
             Spacer(Modifier.height(10.dp))
             BulletLine("an anonymous random ID (created on this device)")
@@ -67,9 +67,9 @@ fun TelemetryConsentDialog(
                 "That's it. No scrolls, no app names, no accounts, no device, " +
                     "advertising, or location identifiers — ever. It's off by default, " +
                     "and you can turn it off (and delete the ID) any time in Settings.",
-                fontSize = 13.sp,
+                fontSize = 14.sp,
                 color = Slate400,
-                lineHeight = 19.sp
+                lineHeight = 20.sp
             )
             Spacer(Modifier.height(20.dp))
             Button(
@@ -93,7 +93,7 @@ fun TelemetryConsentDialog(
 @Composable
 private fun BulletLine(text: String) {
     Row(modifier = Modifier.padding(bottom = 4.dp)) {
-        Text("•  ", fontSize = 14.sp, color = Green)
-        Text(text, fontSize = 14.sp, color = androidx.compose.ui.graphics.Color(0xFFE2E8F0), lineHeight = 20.sp)
+        Text("•  ", fontSize = 16.sp, color = Green)
+        Text(text, fontSize = 16.sp, color = androidx.compose.ui.graphics.Color(0xFFE2E8F0), lineHeight = 24.sp)
     }
 }

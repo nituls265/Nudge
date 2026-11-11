@@ -66,7 +66,8 @@ private fun InterventionOverlay(onTakeBreak: () -> Unit, onIgnore: () -> Unit) {
         ) {
             Text(
                 text = "You've been scrolling\nfor a while",
-                fontSize = 22.sp,
+                fontSize = 24.sp,
+                lineHeight = 32.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,
                 textAlign = TextAlign.Center
@@ -74,8 +75,9 @@ private fun InterventionOverlay(onTakeBreak: () -> Unit, onIgnore: () -> Unit) {
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = "Constant scrolling keeps your brain in a low-grade stress state. A short break resets your focus.",
-                fontSize = 14.sp,
-                color = Color.White.copy(alpha = 0.65f),
+                fontSize = 16.sp,
+                lineHeight = 24.sp,
+                color = Color.White.copy(alpha = 0.8f),
                 textAlign = TextAlign.Center
             )
             Spacer(modifier = Modifier.height(8.dp))
@@ -87,7 +89,7 @@ private fun InterventionOverlay(onTakeBreak: () -> Unit, onIgnore: () -> Unit) {
             ) {
                 Text(
                     "Take a 5-Min Break",
-                    fontSize = 16.sp,
+                    fontSize = 17.sp,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(vertical = 4.dp)
                 )
@@ -105,8 +107,8 @@ private fun InterventionOverlay(onTakeBreak: () -> Unit, onIgnore: () -> Unit) {
             ) {
                 Text(
                     "Ignore",
-                    fontSize = 14.sp,
-                    color = Color.White.copy(alpha = 0.45f)
+                    fontSize = 16.sp,
+                    color = Color.White.copy(alpha = 0.7f)
                 )
             }
         }

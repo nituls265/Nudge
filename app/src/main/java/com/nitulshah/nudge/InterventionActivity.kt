@@ -31,8 +31,11 @@ class InterventionActivity : ComponentActivity() {
             override fun handleOnBackPressed() {} // force a conscious choice
         })
 
+        val sessionMinutes = intent.getIntExtra(EXTRA_SESSION_MIN, 0)
+
         setContent {
             InterventionOverlay(
+                sessionMinutes = sessionMinutes,
                 onTakeBreak = {
                     MyAccessibilityService.resetIntervention()
                     AnalyticsHelper.logInterventionResponse("break", 3)
@@ -40,16 +43,22 @@ class InterventionActivity : ComponentActivity() {
                 },
                 onIgnore = {
                     MyAccessibilityService.startInterventionCooldown()
+                    MyAccessibilityService.snoozeSessionNudge()
                     AnalyticsHelper.logInterventionResponse("ignore", 3)
                     finish()
                 }
             )
         }
     }
+
+    companion object {
+        /** Set when launched by the session-length nudge; minutes on the phone this session. */
+        const val EXTRA_SESSION_MIN = "session_minutes"
+    }
 }
 
 @Composable
-private fun InterventionOverlay(onTakeBreak: () -> Unit, onIgnore: () -> Unit) {
+private fun InterventionOverlay(sessionMinutes: Int, onTakeBreak: () -> Unit, onIgnore: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -65,7 +74,8 @@ private fun InterventionOverlay(onTakeBreak: () -> Unit, onIgnore: () -> Unit) {
                 .padding(32.dp)
         ) {
             Text(
-                text = "You've been scrolling\nfor a while",
+                text = if (sessionMinutes > 0) "You've been on your phone\nfor $sessionMinutes minutes"
+                       else "You've been scrolling\nfor a while",
                 fontSize = 24.sp,
                 lineHeight = 32.sp,
                 fontWeight = FontWeight.Bold,
@@ -74,7 +84,8 @@ private fun InterventionOverlay(onTakeBreak: () -> Unit, onIgnore: () -> Unit) {
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Constant scrolling keeps your brain in a low-grade stress state. A short break resets your focus.",
+                text = if (sessionMinutes > 0) "Long stretches without a pause tire your eyes and your focus. A short break helps."
+                       else "Constant scrolling keeps your brain in a low-grade stress state. A short break resets your focus.",
                 fontSize = 16.sp,
                 lineHeight = 24.sp,
                 color = Color.White.copy(alpha = 0.8f),

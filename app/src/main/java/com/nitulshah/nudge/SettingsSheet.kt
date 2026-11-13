@@ -3,6 +3,7 @@ package com.nitulshah.nudge
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -92,6 +93,46 @@ fun SettingsSheet(vm: ScrollViewModel, onDismiss: () -> Unit) {
                         if (isPaused) "Resume Tracking" else "Pause Tracking",
                         color = MaterialTheme.colorScheme.onBackground
                     )
+                }
+            }
+
+            Spacer(Modifier.height(20.dp))
+
+            // ── Break reminders (session length) ─────────────────────────────
+            // Passive by default: bubble only. Notification / full-screen are opt-in.
+            var nudgeMode by remember { mutableStateOf(SessionNudgePrefs.mode(context)) }
+            Text(
+                "Break reminders",
+                style      = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color      = MaterialTheme.colorScheme.onBackground
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                "Based on how long you've been on your phone in one go. Needs the bubble on.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Slate500
+            )
+            SessionNudgeMode.values().forEach { m ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            nudgeMode = m
+                            SessionNudgePrefs.setMode(context, m)
+                        }
+                        .padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    RadioButton(selected = nudgeMode == m, onClick = {
+                        nudgeMode = m
+                        SessionNudgePrefs.setMode(context, m)
+                    })
+                    Column {
+                        Text(m.label, style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onBackground)
+                        Text(m.description, style = MaterialTheme.typography.bodySmall, color = Slate500)
+                    }
                 }
             }
 

@@ -42,6 +42,14 @@ class MyAccessibilityService : AccessibilityService() {
     private var cooldownJob: Job? = null
     private var pulseAnimator: ValueAnimator? = null
 
+    // Session-length nudge state (see SessionNudge.kt). Active time excludes call time
+    // and survives screen-offs shorter than SessionNudgePolicy.GRACE_MS.
+    private var nudgeActiveMs = 0L
+    private var nudgeSegmentStartMs = 0L
+    private var lastScreenOffMs = 0L
+    private var nudgeJob: Job? = null
+    private var lastActedKey = -1
+
     // Scroll heuristic state
     private var lastSaveTime = 0L
     private var lastWindowStateChangeTime = 0L
@@ -204,10 +212,7 @@ class MyAccessibilityService : AccessibilityService() {
                         cooldownJob = null
                     }
                 }
-                when (state) {
-                    InterventionState.Level1 -> if (isBubbleVisible.value) startAmberPulse()
-                    else -> stopAmberPulse()
-                }
+                refreshBubbleVisual()
             }
         }
     }
@@ -249,6 +254,7 @@ class MyAccessibilityService : AccessibilityService() {
         sessionCallMs   = 0L
         callModeStartMs = 0L
         startCallModePolling()
+        startSessionNudgeClock(now)
 
         if (_firstUnlockMs.value == 0L) {
             _firstUnlockMs.value = now
@@ -275,6 +281,7 @@ class MyAccessibilityService : AccessibilityService() {
 
         // Stop audio polling and flush any in-progress call segment
         stopCallModePolling(flushAt = now)
+        pauseSessionNudgeClock(now)
 
         val rawDurationMs = now - sessionStart
 
@@ -444,7 +451,7 @@ class MyAccessibilityService : AccessibilityService() {
         try {
             windowManager.addView(bubbleView, params)
             updateBubbleText()
-            if (_interventionState.value == InterventionState.Level1) startAmberPulse()
+            refreshBubbleVisual()
         } catch (e: Exception) { e.printStackTrace() }
     }
 
@@ -497,6 +504,92 @@ class MyAccessibilityService : AccessibilityService() {
                 bubbleView?.scaleY = s
             }
             start()
+        }
+    }
+
+    /** Single place that decides the bubble's look from scroll + session nudge state. */
+    private fun refreshBubbleVisual() {
+        val scrollLevel1 = _interventionState.value == InterventionState.Level1
+        val sessionLevel = _sessionNudgeLevel.value
+        when {
+            !_isBubbleVisible.value -> stopAmberPulse()
+            scrollLevel1 || sessionLevel >= SessionNudgeLevel.PULSE -> startAmberPulse()
+            sessionLevel == SessionNudgeLevel.TINT -> {
+                stopAmberPulse()
+                bubbleTextView?.setTextColor(Color.parseColor("#FDE68A"))
+            }
+            else -> stopAmberPulse()
+        }
+    }
+
+    // ── Session-length nudges ─────────────────────────────────────────────────
+
+    private fun startSessionNudgeClock(now: Long) {
+        val resumed = lastScreenOffMs > 0L && now - lastScreenOffMs < SessionNudgePolicy.GRACE_MS
+        if (!resumed) {
+            nudgeActiveMs = 0L
+            lastActedKey = -1
+            sessionSnoozeUntilMs = 0L
+            sessionSnoozeCount = 0
+            _sessionNudgeLevel.value = SessionNudgeLevel.NONE
+        }
+        nudgeSegmentStartMs = now
+        nudgeJob?.cancel()
+        nudgeJob = serviceScope.launch {
+            while (true) {
+                tickSessionNudge()
+                delay(30_000L)
+            }
+        }
+    }
+
+    private fun pauseSessionNudgeClock(now: Long) {
+        // Call time has just been flushed into sessionCallMs by stopCallModePolling.
+        nudgeActiveMs = activeSessionMs(now)
+        lastScreenOffMs = now
+        nudgeJob?.cancel()
+        nudgeJob = null
+        stopAmberPulse()
+    }
+
+    private fun activeSessionMs(now: Long): Long {
+        val ongoingCall = if (callModeStartMs > 0L) now - callModeStartMs else 0L
+        val segment = (now - nudgeSegmentStartMs - sessionCallMs - ongoingCall).coerceAtLeast(0L)
+        return nudgeActiveMs + segment
+    }
+
+    private fun tickSessionNudge() {
+        val mode = SessionNudgePrefs.mode(applicationContext)
+        val now = System.currentTimeMillis()
+        val activeMin = activeSessionMs(now) / 60_000f
+
+        // Same opt-in as the scroll interventions: the bubble must be enabled.
+        val level = if (mode == SessionNudgeMode.OFF || _isPaused.value || !_isBubbleVisible.value)
+            SessionNudgeLevel.NONE else SessionNudgePolicy.levelFor(activeMin)
+        _sessionNudgeLevel.value = level
+        refreshBubbleVisual()
+
+        val action = SessionNudgePolicy.actionFor(level, mode)
+        val key = SessionNudgePolicy.keyFor(level, activeMin)
+        if (action == SessionNudgeAction.NONE || key <= lastActedKey || now < sessionSnoozeUntilMs) return
+        lastActedKey = key
+
+        val minutes = activeMin.toInt()
+        if (action == SessionNudgeAction.OVERLAY) {
+            try {
+                applicationContext.startActivity(
+                    Intent(applicationContext, InterventionActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                        putExtra(InterventionActivity.EXTRA_SESSION_MIN, minutes)
+                    }
+                )
+            } catch (e: Exception) {
+                // Background activity launch can be blocked (Android 12+); fall back to a notification.
+                e.printStackTrace()
+                NotificationHelper.sendSessionNotification(applicationContext, minutes)
+            }
+        } else {
+            NotificationHelper.sendSessionNotification(applicationContext, minutes)
         }
     }
 
@@ -770,6 +863,18 @@ class MyAccessibilityService : AccessibilityService() {
         // Intervention thresholds
         private const val VELOCITY_THRESHOLD   = 100 // scrolls in 5 min to trigger Level 1
         private const val ESCALATION_THRESHOLD = 50  // additional scrolls per level escalation
+
+        // Session-length nudge state
+        internal val _sessionNudgeLevel = MutableStateFlow(SessionNudgeLevel.NONE)
+        @Volatile private var sessionSnoozeUntilMs = 0L
+        @Volatile private var sessionSnoozeCount = 0
+
+        /** Called when the user taps Ignore: delay the next session nudge (10, 20, then 30 min). */
+        fun snoozeSessionNudge() {
+            val mins = SessionNudgePolicy.snoozeMinutes(sessionSnoozeCount)
+            sessionSnoozeCount++
+            sessionSnoozeUntilMs = System.currentTimeMillis() + mins * 60_000L
+        }
 
         // Intervention state
         internal val _interventionState = MutableStateFlow<InterventionState>(InterventionState.Idle)

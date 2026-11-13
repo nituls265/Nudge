@@ -46,4 +46,24 @@ object NotificationHelper {
             .build()
         context.getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification)
     }
+
+    fun sendSessionNotification(context: Context, minutes: Int) {
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            1,
+            Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("$minutes minutes on your phone")
+            .setContentText("Good moment for a stretch or a glass of water?")
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+            .build()
+        context.getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID + 1, notification)
+    }
 }

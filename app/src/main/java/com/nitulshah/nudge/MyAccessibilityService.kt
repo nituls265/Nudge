@@ -6,6 +6,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.os.Build
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.media.AudioManager
@@ -49,6 +50,7 @@ class MyAccessibilityService : AccessibilityService() {
     private var lastScreenOffMs = 0L
     private var nudgeJob: Job? = null
     private var lastActedKey = -1
+    private var breakRequestedMs = 0L
 
     // Scroll heuristic state
     private var lastSaveTime = 0L
@@ -98,6 +100,7 @@ class MyAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        instance = this
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         audioManager  = getSystemService(AUDIO_SERVICE)  as AudioManager
         currentDayString = DayBoundary.today()
@@ -525,8 +528,11 @@ class MyAccessibilityService : AccessibilityService() {
     // ── Session-length nudges ─────────────────────────────────────────────────
 
     private fun startSessionNudgeClock(now: Long) {
-        val resumed = lastScreenOffMs > 0L && now - lastScreenOffMs < SessionNudgePolicy.GRACE_MS
+        val breakPending = breakRequestedMs > 0L && lastScreenOffMs >= breakRequestedMs
+        val resumed = lastScreenOffMs > 0L &&
+            SessionNudgePolicy.continuesSession(now - lastScreenOffMs, breakPending)
         if (!resumed) {
+            breakRequestedMs = 0L
             nudgeActiveMs = 0L
             lastActedKey = -1
             sessionSnoozeUntilMs = 0L
@@ -540,6 +546,15 @@ class MyAccessibilityService : AccessibilityService() {
                 tickSessionNudge()
                 delay(30_000L)
             }
+        }
+    }
+
+    /** Locks the screen (API 28+) so the break is real; the session only resets after 5 min off. */
+    private fun beginSessionBreak() {
+        breakRequestedMs = System.currentTimeMillis()
+        _interventionState.value = InterventionState.Idle
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            performGlobalAction(GLOBAL_ACTION_LOCK_SCREEN)
         }
     }
 
@@ -853,6 +868,7 @@ class MyAccessibilityService : AccessibilityService() {
 
     override fun onDestroy() {
         super.onDestroy()
+        if (instance === this) instance = null
         cooldownJob?.cancel()
         audioPollingJob?.cancel()
         try { unregisterReceiver(unlockReceiver) } catch (e: Exception) { e.printStackTrace() }
@@ -868,6 +884,11 @@ class MyAccessibilityService : AccessibilityService() {
         internal val _sessionNudgeLevel = MutableStateFlow(SessionNudgeLevel.NONE)
         @Volatile private var sessionSnoozeUntilMs = 0L
         @Volatile private var sessionSnoozeCount = 0
+
+        @Volatile private var instance: MyAccessibilityService? = null
+
+        /** "Take a break" on the session prompt: lock the screen and require a real 5-minute rest. */
+        fun takeSessionBreak() { instance?.beginSessionBreak() ?: resetIntervention() }
 
         /** Called when the user taps Ignore: delay the next session nudge (10, 20, then 30 min). */
         fun snoozeSessionNudge() {

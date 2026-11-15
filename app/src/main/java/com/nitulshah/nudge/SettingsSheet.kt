@@ -1,8 +1,12 @@
 package com.nitulshah.nudge
 
+import android.Manifest
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -14,6 +18,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.app.NotificationManagerCompat
 import com.nitulshah.nudge.telemetry.Telemetry
 
 // ── SettingsSheet ─────────────────────────────────────────────────────────────
@@ -101,6 +106,29 @@ fun SettingsSheet(vm: ScrollViewModel, onDismiss: () -> Unit) {
             // ── Break reminders (session length) ─────────────────────────────
             // Passive by default: bubble only. Notification / full-screen are opt-in.
             var nudgeMode by remember { mutableStateOf(SessionNudgePrefs.mode(context)) }
+            // What the chosen mode still needs from the user: null, "notifications" or "overlay".
+            var nudgeHint by remember { mutableStateOf<String?>(null) }
+
+            fun missingOverlayHint(mode: SessionNudgeMode): String? =
+                if (mode == SessionNudgeMode.FULL_SCREEN && !Settings.canDrawOverlays(context)) "overlay" else null
+
+            val notificationPermission = rememberLauncherForActivityResult(
+                ActivityResultContracts.RequestPermission()
+            ) { granted -> nudgeHint = if (!granted) "notifications" else missingOverlayHint(nudgeMode) }
+
+            fun selectNudgeMode(m: SessionNudgeMode) {
+                nudgeMode = m
+                SessionNudgePrefs.setMode(context, m)
+                nudgeHint = null
+                val needsNotifications = m == SessionNudgeMode.NOTIFICATIONS || m == SessionNudgeMode.FULL_SCREEN
+                if (needsNotifications && !NotificationManagerCompat.from(context).areNotificationsEnabled()) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+                        notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    else nudgeHint = "notifications"
+                } else {
+                    nudgeHint = missingOverlayHint(m)
+                }
+            }
             Text(
                 "Break reminders",
                 style      = MaterialTheme.typography.titleSmall,
@@ -117,23 +145,42 @@ fun SettingsSheet(vm: ScrollViewModel, onDismiss: () -> Unit) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable {
-                            nudgeMode = m
-                            SessionNudgePrefs.setMode(context, m)
-                        }
+                        .clickable { selectNudgeMode(m) }
                         .padding(vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    RadioButton(selected = nudgeMode == m, onClick = {
-                        nudgeMode = m
-                        SessionNudgePrefs.setMode(context, m)
-                    })
+                    RadioButton(selected = nudgeMode == m, onClick = { selectNudgeMode(m) })
                     Column {
                         Text(m.label, style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onBackground)
                         Text(m.description, style = MaterialTheme.typography.bodySmall, color = Slate500)
                     }
                 }
+            }
+
+            nudgeHint?.let { hint ->
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    if (hint == "notifications")
+                        "Notifications are blocked for Nudge, so this reminder can't show yet."
+                    else
+                        "Allow Nudge to display over other apps so the break screen can appear.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+                TextButton(onClick = {
+                    if (hint == "notifications") {
+                        context.startActivity(
+                            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                                .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                        )
+                    } else {
+                        context.startActivity(
+                            Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                Uri.parse("package:${context.packageName}"))
+                        )
+                    }
+                }) { Text("Open settings") }
             }
 
             Spacer(Modifier.height(20.dp))

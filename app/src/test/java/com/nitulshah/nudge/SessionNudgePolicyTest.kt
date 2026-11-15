@@ -45,6 +45,16 @@ class SessionNudgePolicyTest {
         assertTrue(keys[6] > keys[5])           // 90 min: next repeat
     }
 
+    @Test fun shortScreenOffContinuesSession() {
+        assertTrue(SessionNudgePolicy.continuesSession(60_000L, breakRequested = false))
+        assertTrue(!SessionNudgePolicy.continuesSession(120_000L, breakRequested = false))
+    }
+
+    @Test fun afterBreakTheScreenMustStayOffFiveMinutes() {
+        assertTrue(SessionNudgePolicy.continuesSession(3 * 60_000L, breakRequested = true))
+        assertTrue(!SessionNudgePolicy.continuesSession(5 * 60_000L, breakRequested = true))
+    }
+
     @Test fun snoozeEscalatesAndCaps() {
         assertEquals(10, SessionNudgePolicy.snoozeMinutes(0))
         assertEquals(20, SessionNudgePolicy.snoozeMinutes(1))

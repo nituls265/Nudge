@@ -37,7 +37,8 @@ class InterventionActivity : ComponentActivity() {
             InterventionOverlay(
                 sessionMinutes = sessionMinutes,
                 onTakeBreak = {
-                    MyAccessibilityService.resetIntervention()
+                    if (sessionMinutes > 0) MyAccessibilityService.takeSessionBreak()
+                    else MyAccessibilityService.resetIntervention()
                     AnalyticsHelper.logInterventionResponse("break", 3)
                     finish()
                 },

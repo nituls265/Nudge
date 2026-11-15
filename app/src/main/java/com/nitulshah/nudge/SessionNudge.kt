@@ -37,8 +37,18 @@ enum class SessionNudgeAction { NONE, NOTIFICATION, OVERLAY }
 object SessionNudgePolicy {
     /** A screen-off shorter than this does not end the session. */
     const val GRACE_MS = 2 * 60_000L
+    /** After tapping "Take a break", the screen must stay off this long to count as a real break. */
+    const val BREAK_REST_MS = 5 * 60_000L
     /** Once past the top level, re-nudge this often. */
     const val REPEAT_MIN = 15
+
+    /**
+     * Whether unlocking [gapMs] after the screen went off continues the same session.
+     * Normally a gap under [GRACE_MS] does; after an explicit break the user must
+     * actually rest for [BREAK_REST_MS], so unlocking straight away doesn't reset the clock.
+     */
+    fun continuesSession(gapMs: Long, breakRequested: Boolean): Boolean =
+        gapMs < (if (breakRequested) BREAK_REST_MS else GRACE_MS)
 
     fun levelFor(activeMin: Float): SessionNudgeLevel =
         SessionNudgeLevel.values().last { activeMin >= it.minutes }
